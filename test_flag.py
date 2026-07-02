@@ -29,7 +29,7 @@ def fetch_discogs_releases():
     
     # Формируем легальный запрос к базе Discogs
     # Ищем строго стиль "Black Metal", формат "Album" и год 2026
-    url = P + "www.discogs.com" + S + "database" + S + "search"
+    url = P + "api.discogs.com" + S + "database" + S + "search"
     params = {
         "style": "Black Metal",
         "type": "release",
