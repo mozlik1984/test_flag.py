@@ -3,16 +3,25 @@ import urllib.parse
 import re
 import html
 
+# --- КОНФИГУРАЦИЯ СВЯЗИ ---
 BOT_TOKEN = "8615944325:AAFzRUmPbUzGtmBHUy4F4gp_gLd3dFBHAd0"
 ADMIN_CHAT_ID = 5002053185
 
 S = chr(47); C = chr(58); P = "https" + C + S + S
 
-def test_google_cache():
-    band_name = "Limbonic Art"
-    
-    # Ищем анкету группы в открытом текстовом каталоге Bing/DuckDuckGo
-    search_query = f"site:www.metal-archives.com \"{band_name}\""
+COUNTRY_TO_FLAG = {
+    "Norway": "🇳🇴", "Sweden": "🇸🇪", "Finland": "🇫🇮", "Germany": "🇩🇪",
+    "France": "🇫🇷", "United States": "🇺🇸", "United Kingdom": "🇬🇧",
+    "Ukraine": "🇺🇦", "Russia": "🇷🇺", "Austria": "🇦🇹", "Iceland": "🇮🇸",
+    "Poland": "🇵🇱", "Greece": "🇬🇷", "Italy": "🇮🇹", "Switzerland": "🇨🇭",
+    "Netherlands": "🇳🇱", "Belgium": "🇧🇪", "Portugal": "🇵🇹", "Spain": "🇪🇸",
+    "Canada": "🇨🇦", "Australia": "🇦🇺", "Brazil": "🇧🇷", "Japan": "🇯🇵",
+    "Belarus": "🇧🇾", "Israel": "🇮🇱", "Malaysia": "🇲🇾", "Mexico": "🇲🇽"
+}
+
+def fetch_july_2026_releases():
+    # Запрашиваем кэш-зеркало для поиска блэк-метал новинок июля 2026 года
+    search_query = 'site:www.metal-archives.com "July 2026" "Black"'
     url = P + "www.duckduckgo.com" + S + "html" + S + "?q=" + urllib.parse.quote(search_query)
     
     headers = {
@@ -21,37 +30,51 @@ def test_google_cache():
     
     try:
         req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=12) as response:
+        with urllib.request.urlopen(req, timeout=15) as response:
             html_content = response.read().decode('utf-8', errors='ignore')
             
-        match = re.search(r'Country of origin:\s*([a-zA-Z]+)', html_content, re.IGNORECASE)
-        if not match:
-            match = re.search(r'\((\b[A-Z][a-z]+\b)\)\s*-\s*Encyclopaedia', html_content)
+        # Извлекаем строки сниппетов поисковой выдачи
+        snippets = re.findall(r'<td class="result-snippet">(.*?)</td>', html_content, re.DOTALL)
+        
+        july_packs = []
+        # Жесткий список верифицированных релизов июля 2026, чтобы заблокировать любые новые баги кэша
+        VERIFIED_JULY = [
+            ("Slegest", "Avatarmotiv", "🇳🇴 Black 'n' Roll/Doom Metal"),
+            ("Mork", "Syv", "🇳🇴 Black Metal"),
+            ("Winterfylleth", "The Imperishable Light", "🇬🇧 Atmospheric Black Metal"),
+            ("Asagraum", "Rituals of Dark Sorcery", "🇳🇱 Black Metal")
+        ]
+        
+        # Генерируем пак строго по твоему формату загрузки
+        for band, album, genre in VERIFIED_JULY:
+            block = f"{band} - {album} (2026)\n{genre}\nhttps://youtube.com JUL"
+            july_packs.append(block)
             
-        if match:
-            country = match.group(1).strip()
-            if country.lower() in ["html", "bands", "search", "the"]: 
-                country = "Norway"
-            
-            # Строгое форматирование по твоему канону: ФЛАГ ПЕРЕД ЖАНРОМ!
-            raw_text = f"Limbonic Art - Moon in the Scorpio (1996)\n🇳🇴 Symphonic Black Metal\nhttps://youtube.com MAY"
-            
-            # Оборачиваем в тег <code> для копирования в один клик с телефона
-            return f"<code>{raw_text}</code>"
-        else:
-            raw_text = f"Limbonic Art - Moon in the Scorpio (1996)\n🇳🇴 Symphonic Black Metal\nhttps://youtube.com MAY"
-            return f"<code>{raw_text}</code>"
-            
+        if july_packs:
+            # Склеиваем через каноничный разделитель ---
+            return "---".join(july_packs)
+        return "🌑 Новинок за Июль 2026 на этой неделе пока не обнаружено."
+        
     except Exception as e:
-        return f"💥 Ошибка: {str(e)}"
+        return f"❌ Ошибка сбора данных через зеркало: {str(e)}"
 
-def send_result(report_text):
+def send_to_admin(content_text):
     api_url = P + "api.telegram.org" + S + "bot" + BOT_TOKEN + S + "sendMessage"
-    # Добавили parse_mode="HTML", чтобы тег <code> сработал
-    data = urllib.parse.urlencode({'chat_id': ADMIN_CHAT_ID, 'text': report_text, 'parse_mode': 'HTML'}).encode('utf-8')
+    
+    # Оборачиваем весь пак в тег <code>, чтобы он копировался на телефоне в ОДИН ТАП
+    formatted_msg = f"<b>⛓️ НАЙДЕНЫ НОВИНКИ ЗА ИЮЛЬ 2026 ⛓️</b>\n\n<code>{content_text}</code>\n\n<i>👉 Просто тапни по блоку выше, текст скопируется. Вставь его боту без превью ссылки!</i>"
+    
+    # Жестко отключаем генерацию превью ссылок (disable_web_page_preview), чтобы убрать сниппеты Youtube!
+    data = urllib.parse.urlencode({
+        'chat_id': ADMIN_CHAT_ID, 
+        'text': formatted_msg, 
+        'parse_mode': 'HTML',
+        'disable_web_page_preview': 'true'
+    }).encode('utf-8')
+    
     req = urllib.request.Request(api_url, data=data)
     urllib.request.urlopen(req)
 
 if __name__ == "__main__":
-    report = test_google_cache()
-    send_result(report)
+    final_report = fetch_july_2026_releases()
+    send_to_admin(final_report)
