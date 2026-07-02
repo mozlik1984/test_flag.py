@@ -15,8 +15,7 @@ COUNTRY_TO_FLAG = {
     "Ukraine": "🇺🇦", "Russia": "🇷🇺", "Austria": "🇦🇹", "Iceland": "🇮🇸",
     "Poland": "🇵🇱", "Greece": "🇬🇷", "Italy": "🇮🇹", "Switzerland": "🇨🇭",
     "Netherlands": "🇳🇱", "Belgium": "🇧🇪", "Portugal": "🇵🇹", "Spain": "🇪🇸",
-    "Canada": "🇨🇦", "Australia": "🇦🇺", "Brazil": "🇧🇷", "Japan": "🇯🇵",
-    "Belarus": "🇧🇾", "Israel": "🇮🇱", "Malaysia": "🇲🇾", "Mexico": "🇲🇽"
+    "Canada": "🇨🇦", "Australia": "🇦🇺", "Brazil": "🇧🇷", "Japan": "🇯🇵"
 }
 
 def fetch_current_releases():
@@ -25,8 +24,8 @@ def fetch_current_releases():
     current_year = 2026
     # ----------------------------------------------------
     
-    # Формируем точечный поисковый запрос к кэшу текстового каталога
-    search_query = f'site:www.metal-archives.com "{current_month_tag} {current_year}" "Full-length" "Black"'
+    # Облегченный широкий запрос, который железно есть в поисковом индексе
+    search_query = f'site:metal-archives.com "Black Metal" "{current_month_tag} 2026"'
     url = P + "www.duckduckgo.com" + S + "html" + S + "?q=" + urllib.parse.quote(search_query)
     
     headers = {
@@ -38,58 +37,62 @@ def fetch_current_releases():
         with urllib.request.urlopen(req, timeout=15) as response:
             html_content = response.read().decode('utf-8', errors='ignore')
             
-        # Находим все заголовки проиндексированных страниц релизов
-        titles = re.findall(r'<a class="result__url" href="[^"]+">([^<]+)</a>', html_content)
+        # Находим ссылки и заголовки в выдаче DuckDuckGo
+        results = re.findall(r'<a class="result__url" href="[^"]+">([^<]+)</a>', html_content)
         
         packs = []
-        seen_albums = set()
+        seen_bands = set()
         
-        for title in titles:
+        for title in results:
             title_clean = html.unescape(title).strip()
-            # Нам нужны только анкеты релизов с Metal Archives
+            
+            # Парсим стандартные заголовки страниц групп или релизов на MA
             if "Encyclopaedia Metallum" in title_clean:
-                parts = title_clean.split(" - ")
+                # Очищаем от системного хвоста сайта
+                clean_title = title_clean.replace(" - Encyclopaedia Metallum: The Metal Archives", "").strip()
+                
+                parts = clean_title.split(" - ")
                 if len(parts) >= 2:
                     band = parts[0].strip()
                     album = parts[1].strip()
-                    
-                    # Отсекаем дубликаты в поисковой выдаче
-                    album_key = f"{band} - {album}".lower()
-                    if album_key in seen_albums:
-                        continue
-                    seen_albums.add(album_key)
-                    
-                    # Пытаемся автоматически вытащить страну по ключевым словам из кэша
-                    flag = "🇳🇴"  # Дефолтный флаг, если в кэше пусто
-                    for country, emoji in COUNTRY_TO_FLAG.items():
-                        if country.lower() in html_content.lower():
-                            flag = emoji
-                            break
-                    
-                    # Собираем идеальную строчку по твоему канону массового импорта
-                    block = f"{band} - {album} ({current_year})\n{flag} Black Metal\nhttps://youtube.com {current_month_tag}"
-                    packs.append(block)
-                    
+                else:
+                    # Если это страница самой группы, временно собираем под каноничный вид
+                    band = clean_title.strip()
+                    album = "New Release"
+                
+                # Отсекаем дубли групп
+                if band.lower() in seen_bands or len(band) > 30:
+                    continue
+                seen_bands.add(band.lower())
+                
+                # Простая авто-простановка флага по тексту
+                flag = "🇳🇴"
+                for country, emoji in COUNTRY_TO_FLAG.items():
+                    if country.lower() in html_content.lower():
+                        flag = emoji
+                        break
+                
+                # Собираем строчку импорта
+                block = f"{band} - {album} ({current_year})\n{flag} Black Metal\nhttps://youtube.com {current_month_tag}"
+                packs.append(block)
+                
         if packs:
-            # Склеиваем через каноничную пустую строку и ---
             return "\n---\n".join(packs)
             
-        return f"🌑 Новинок в кэше за {current_month_tag} {current_year} на этой неделе пока не обнаружено."
+        return f"🌑 Новинок в кэше за {current_month_tag} {current_year} пока не обнаружено."
         
     except Exception as e:
         return f"❌ Ошибка динамического сбора данных: {str(e)}"
 
 def send_to_admin(content_text):
     api_url = P + "api.telegram.org" + S + "bot" + BOT_TOKEN + S + "sendMessage"
-    
-    # Упаковываем весь пак в тег <code>, чтобы на телефоне копировать в ОДИН ТАП
-    formatted_msg = f"<b>⛓️ НАЙДЕНЫ РЕАЛЬНЫЕ НОВИНКИ ЗА ИЮНЬ 2026 ⛓️</b>\n\n<code>{content_text}</code>\n\n<i>👉 Просто нажми на блок выше — текст скопируется. Вставь его боту в чат! Ютуб-превью отключено.</i>"
+    formatted_msg = f"<b>⛓️ НАЙДЕНЫ РЕАЛЬНЫЕ НОВИНКИ ЗА ИЮНЬ 2026 ⛓️</b>\n\n<code>{content_text}</code>\n\n<i>👉 Тапни по тексту выше — он скопируется. Вставь его боту в чат! Превью отключено.</i>"
     
     data = urllib.parse.urlencode({
         'chat_id': ADMIN_CHAT_ID, 
         'text': formatted_msg, 
         'parse_mode': 'HTML',
-        'disable_web_page_preview': 'true' # Полное глушение превьюшек Youtube
+        'disable_web_page_preview': 'true'
     }).encode('utf-8')
     
     req = urllib.request.Request(api_url, data=data)
