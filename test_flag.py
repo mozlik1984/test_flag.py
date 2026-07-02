@@ -22,8 +22,8 @@ COUNTRY_TO_FLAG = {
 
 def fetch_discogs_releases():
     # --- НАСТРОЙКА МАШИНЫ ВРЕМЕНИ (СТРОГО ИЮНЬ 2026) ---
-    current_month_tag = "JUN"
-    target_month_num = "06"  # Строгий числовой фильтр июня для проверки даты
+    current_month_tag = "MAR"
+    target_month_num = "03"  # Строгий числовой фильтр июня для проверки даты
     current_year = 2026
     # ----------------------------------------------------
     
