@@ -1,13 +1,15 @@
 name: Run Metal Test
 
 on:
-  workflow_dispatch: # Оставляем кнопку ручного запуска для тестов
+  workflow_dispatch:
   schedule:
-    - cron: '0 12 * * 1' # Автоматический запуск каждый ПОНЕДЕЛЬНИК в 12:00 дня по Гринвичу
+    - cron: '0 12 * * *' # Будет запускаться САМ каждый день в 12:00
 
 jobs:
   run-script:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Даем права Гитхабу сохранять файлы в репозиторий
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -19,3 +21,11 @@ jobs:
 
       - name: Run Test Script
         run: python test_flag.py
+
+      - name: Commit and Push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@://github.com"
+          git add june_2026.txt
+          git commit -m "Авто-обновление базы релизов" || exit 0
+          git push
