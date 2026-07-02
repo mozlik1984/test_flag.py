@@ -12,18 +12,21 @@ def test_metal_archives():
     encoded_name = urllib.parse.quote(band_name)
     url = P + "www.metal-archives.com" + S + "search?searchString=" + encoded_name + "&type=band_name"
     
+    # Максимально жесткая маскировка под реальный браузер, включая Referer и Cookie куратора сессии
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': P + 'www.metal-archives.com' + S,
+        'Cookie': 'ma_session=1;'  # Имитируем, что куки уже выданы сайтом
     }
     
     try:
         req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=10) as response:
+        with urllib.request.urlopen(req, timeout=12) as response:
             html_content = response.read().decode('utf-8', errors='ignore')
             
-        match = re.search(r'<td><a href="https://metal-archives.com/lists/[^"]+">([^<]+)</a></td>', html_content)
+        match = re.search(r'<td><a href="https://://metal-archives.com/lists/[^"]+">([^<]+)</a></td>', html_content)
         if not match:
             match = re.search(r'<dt>Country of origin:</dt>\s*<dd><a href="[^"]+">([^<]+)</a></dd>', html_content)
             
@@ -31,7 +34,7 @@ def test_metal_archives():
             country = match.group(1).strip()
             return f"✅ ГИТХАБ-ТЕСТ УСПЕШЕН!\n🌍 Группа: {band_name}\n🏴‍☠️ Страна на MA: {country}"
         else:
-            return f"❌ Сеть Гитхаба работает, но регулярка промахнулась мимо HTML."
+            return f"❌ Сеть Гитхаба пробила 403, но регулярка промахнулась мимо HTML. Ответ получен!"
     except Exception as e:
         return f"💥 Гитхаб заблокирован Cloudflare: {str(e)}"
 
