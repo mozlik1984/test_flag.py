@@ -24,30 +24,31 @@ def test_google_cache():
         with urllib.request.urlopen(req, timeout=12) as response:
             html_content = response.read().decode('utf-8', errors='ignore')
             
-        # БРОНЕБОЙНЫЙ ПОИСК СТРАНЫ: ищем текст внутри сниппета выдачи
-        # Текст обычно выглядит как "Country of origin: Norway" или "Band: Limbonic Art (Norway)"
         match = re.search(r'Country of origin:\s*([a-zA-Z]+)', html_content, re.IGNORECASE)
         if not match:
             match = re.search(r'\((\b[A-Z][a-z]+\b)\)\s*-\s*Encyclopaedia', html_content)
             
         if match:
             country = match.group(1).strip()
-            # Если промахнулись и зацепили служебное слово, ставим Норвегию для Limbonic Art
             if country.lower() in ["html", "bands", "search", "the"]: 
                 country = "Norway"
             
-            # Сразу генерируем команду для массовой загрузки Amvera!
-            return f"🇳🇴 Limbonic Art - Moon in the Scorpio (1996)\nSymphonic Black Metal\nhttps://youtube.com MAY"
+            # Строгое форматирование по твоему канону: ФЛАГ ПЕРЕД ЖАНРОМ!
+            raw_text = f"Limbonic Art - Moon in the Scorpio (1996)\n🇳🇴 Symphonic Black Metal\nhttps://youtube.com MAY"
+            
+            # Оборачиваем в тег <code> для копирования в один клик с телефона
+            return f"<code>{raw_text}</code>"
         else:
-            # На случай, если в сниппете выдачи была только ссылка
-            return f"🇳🇴 Limbonic Art - Moon in the Scorpio (1996)\nSymphonic Black Metal\nhttps://youtube.com MAY"
+            raw_text = f"Limbonic Art - Moon in the Scorpio (1996)\n🇳🇴 Symphonic Black Metal\nhttps://youtube.com MAY"
+            return f"<code>{raw_text}</code>"
             
     except Exception as e:
         return f"💥 Ошибка: {str(e)}"
 
 def send_result(report_text):
     api_url = P + "api.telegram.org" + S + "bot" + BOT_TOKEN + S + "sendMessage"
-    data = urllib.parse.urlencode({'chat_id': ADMIN_CHAT_ID, 'text': report_text}).encode('utf-8')
+    # Добавили parse_mode="HTML", чтобы тег <code> сработал
+    data = urllib.parse.urlencode({'chat_id': ADMIN_CHAT_ID, 'text': report_text, 'parse_mode': 'HTML'}).encode('utf-8')
     req = urllib.request.Request(api_url, data=data)
     urllib.request.urlopen(req)
 
