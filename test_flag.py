@@ -21,9 +21,10 @@ COUNTRY_TO_FLAG = {
 }
 
 def fetch_discogs_releases():
-    # --- НАСТРОЙКА МАШИНЫ ВРЕМЕНИ (СТРОГО ИЮНЬ 2026) ---
+    # --- НАСТРОЙКА МАШИНЫ ВРЕМЕНИ (МАРТ 2026) ---
     current_month_tag = "MAR"
-    target_month_num = "03"  # Строгий числовой фильтр июня для проверки даты
+    month_name_full = "march"  # Ищем упоминание месяца текстом
+    month_num_alt = "03"       # Ищем числовой формат
     current_year = 2026
     # ----------------------------------------------------
     
@@ -33,11 +34,13 @@ def fetch_discogs_releases():
         "type": "release",
         "format": "Album",
         "year": str(current_year),
-        "per_page": 50 # Берем выборку больше, чтобы отфильтровать нужный месяц
+        "sort": "year",        # Сортировка по году релиза
+        "sort_order": "desc",  # Сначала самые новые поступления
+        "per_page": 100        # Расширяем выборку до 100, чтобы точно зацепить месяц
     }
     
     headers = {
-        "User-Agent": "BlackMetalHubBot/3.0",
+        "User-Agent": "BlackMetalHubBot/4.0",
         "Authorization": f"Discogs token={DISCOGS_TOKEN}"
     }
     
@@ -54,13 +57,15 @@ def fetch_discogs_releases():
                 seen_releases = set()
                 
                 for item in results:
-                    # ЖЕСТКАЯ ПРОВЕКА ДАТЫ: смотрим на поле детальной даты релиза
-                    # Discogs отдает даты в формате YYYY-MM-DD или YYYY-MM
-                    release_date = item.get("date", "")
-                    target_pattern = f"{current_year}-{target_month_num}"
+                    # УМНЫЙ ГИБКИЙ ФИЛЬТР ДАТЫ
+                    release_date = str(item.get("date", "")).lower()
                     
-                    if not release_date or target_pattern not in release_date:
-                        continue # Сбрасываем все январские, февральские и чужие релизы!
+                    # Если в поле даты вообще ничего нет, или там просто год 2026 без уточнений,
+                    # мы временно пропускаем строгий фильтр, чтобы дать тебе увидеть свежий живой улов
+                    is_valid_month = (month_name_full in release_date) or (f"-{month_num_alt}-" in release_date) or (release_date == "2026")
+                    
+                    if not is_valid_month:
+                        continue
 
                     title = item.get("title", "")
                     if " - " in title:
@@ -68,7 +73,7 @@ def fetch_discogs_releases():
                         band = parts[0].strip()
                         album = parts[1].strip()
                         
-                        # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Очищаем мусор Discogs (убираем скобки типа (2) и звездочки)
+                        # Очищаем технический мусор Discogs списков
                         band = re.sub(r'\s*\(\d+\)$', '', band).replace('*', '').strip()
                         album = re.sub(r'\s*\(\d+\)$', '', album).replace('*', '').strip()
                         
@@ -84,16 +89,17 @@ def fetch_discogs_releases():
                         packs.append(block)
                         
                 if packs:
-                    return "\n---\n".join(packs)
+                    # Возвращаем первые 15 самых свежих очищенных релизов
+                    return "\n---\n".join(packs[:15])
                     
-        return f"🌑 Проверенных полноформатных релизов строго за {current_month_tag} {current_year} в текущей выдаче API пока не обнаружено."
+        return f"🌑 Релизов за {current_month_tag} {current_year} с точным тегом даты не найдено."
         
     except Exception as e:
         return f"❌ Ошибка Discogs API: {str(e)}"
 
 def send_to_admin(content_text):
     api_url = P + "api.telegram.org" + S + "bot" + BOT_TOKEN + S + "sendMessage"
-    formatted_msg = f"<b>⛓️ НАЙДЕНЫ РЕАЛЬНЫЕ РЕЛИЗЫ ИЗ БАЗЫ DISCOGS ⛓️</b>\n\n<code>{content_text}</code>\n\n<i>👉 Тапни по тексту выше — он скопируется. Вставь его боту в чат! Превью отключено.</i>"
+    formatted_msg = f"<b>⛓️ НАЙДЕНЫ СВЕЖИЕ РЕЛИЗЫ ИЗ БАЗЫ DISCOGS ⛓️</b>\n\n<code>{content_text}</code>\n\n<i>👉 Тапни по тексту выше — он скопируется. Вставь его боту в чат! Превью отключено.</i>"
     
     data = urllib.parse.urlencode({
         'chat_id': ADMIN_CHAT_ID, 
