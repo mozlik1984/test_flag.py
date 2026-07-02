@@ -1,7 +1,9 @@
 name: Run Metal Test
 
 on:
-  workflow_dispatch: # Позволяет запускать кнопкой вручную
+  workflow_dispatch: # Оставляем кнопку ручного запуска для тестов
+  schedule:
+    - cron: '0 12 * * 1' # Автоматический запуск каждый ПОНЕДЕЛЬНИК в 12:00 дня по Гринвичу
 
 jobs:
   run-script:
