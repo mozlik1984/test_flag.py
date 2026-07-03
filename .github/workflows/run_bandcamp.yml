@@ -1,7 +1,16 @@
 name: Run Bandcamp Underground Collector
 
 on:
-  workflow_dispatch: # Запуск кнопкой в любое время
+  workflow_dispatch:
+    inputs:
+      month:
+        description: 'Месяц (капсом: JAN, FEB, MAR) или AUTO'
+        required: true
+        default: 'AUTO'
+      year:
+        description: 'Год релиза (например, 2026, 2025) или AUTO'
+        required: true
+        default: 'AUTO'
 
 jobs:
   run-bandcamp-script:
@@ -16,4 +25,4 @@ jobs:
           python-version: '3.10'
 
       - name: Run Bandcamp Parser
-        run: python bandcamp.py
+        run: python bandcamp.py "${{ github.event.inputs.month }}" "${{ github.event.inputs.year }}"
