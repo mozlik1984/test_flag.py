@@ -2,14 +2,22 @@ name: Run Metal Test
 
 on:
   workflow_dispatch:
+    inputs:
+      month:
+        description: 'Месяц (капсом: JUN, MAY, MAR) или оставь AUTO'
+        required: true
+        default: 'AUTO'
+      year:
+        description: 'Год релиза (например, 2026, 2025) или оставь AUTO'
+        required: true
+        default: 'AUTO'
+        
   schedule:
-    - cron: '0 12 * * *' # Будет запускаться САМ каждый день в 12:00
+    - cron: '0 12 * * 1' # Авто-запуск по понедельникам всегда работает в режиме AUTO
 
 jobs:
   run-script:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # Даем права Гитхабу сохранять файлы в репозиторий
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -20,12 +28,5 @@ jobs:
           python-version: '3.10'
 
       - name: Run Test Script
-        run: python test_flag.py
-
-      - name: Commit and Push changes
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@://github.com"
-          git add june_2026.txt
-          git commit -m "Авто-обновление базы релизов" || exit 0
-          git push
+        # Передаем введенные тобой месяц и год в Python-скрипт
+        run: python test_flag.py "${{ github.event.inputs.month }}" "${{ github.event.inputs.year }}"
