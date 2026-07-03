@@ -2,9 +2,9 @@ import urllib.request
 import urllib.parse
 import json
 import time
+import sys
 import re
 
-# --- КОНФИГУРАЦИЯ СВЯЗИ ---
 BOT_TOKEN = "8615944325:AAFzRUmPbUzGtmBHUy4F4gp_gLd3dFBHAd0"
 ADMIN_CHAT_ID = 5002053185
 
@@ -20,25 +20,35 @@ COUNTRY_TO_FLAG = {
 }
 
 def fetch_musicbrainz_new_arrivals():
-    # 1. Автоматически определяем текущий месяц капсом для тега и год
+    # 1. АВТОМАТИЧЕСКОЕ ОПРЕДЕЛЕНИЕ ТЕКУЩЕЙ ДАТЫ
     months_map = {1: "JAN", 2: "FEB", 3: "MAR", 4: "APR", 5: "MAY", 6: "JUN", 7: "JUL", 8: "AUG", 9: "SEP", 10: "OCT", 11: "NOV", 12: "DEC"}
+    months_num_map = {"JAN": "01", "FEB": "02", "MAR": "03", "APR": "04", "MAY": "05", "JUN": "06", "JUL": "07", "AUG": "08", "SEP": "09", "OCT": "10", "NOV": "11", "DEC": "12"}
+    
     time_struct = time.gmtime()
     current_month_tag = months_map.get(time_struct.tm_mon, "JUL")
+    current_month_num = str(time_struct.tm_mon).zfill(2)
     current_year = time_struct.tm_year
     
-    # Июньский лог для тестов (если хочешь прошлый месяц, раскомментируй эти 2 строки):
-    # current_month_tag = "JUN"
-    # current_month_num = "06"
+    # 2. ПЕРЕХВАТ РУЧНОГО ВВОДА С ЭКРАНА GITHUB
+    # Проверяем, передал ли нам Гитхаб параметры из текстовых полей
+    if len(sys.argv) > 2:
+        input_month = sys.argv[1].strip().upper()
+        input_year = sys.argv[2].strip()
+        
+        if input_month != "AUTO" and input_month in months_num_map:
+            current_month_tag = input_month
+            current_month_num = months_num_map[input_month]
+        if input_year != "AUTO" and input_year.isdigit():
+            current_year = int(input_year)
+
+    print(f"🚀 Запуск поиска релизов по цели: {current_month_tag} {current_year} (Числовой месяц: {current_month_num})")
     
-    current_month_num = str(time_struct.tm_mon).zfill(2)
-    
-    # 2. Формируем легальный поисковый запрос к API MusicBrainz
-    # Ищем релизы, где тип=album, статус=official, дата содержит YYYY-MM, а тег стиля = black metal
+    # 3. ЛЕГАЛЬНЫЙ ЗАПРОС К API MUSICBRAINZ
     query = f'type:album AND status:official AND date:{current_year}-{current_month_num} AND tag:"black metal"'
     url = P + "musicbrainz.org" + S + "ws" + S + "2" + S + "release" + "?query=" + urllib.parse.quote(query) + "&fmt=json&limit=30"
     
     headers = {
-        'User-Agent': 'BlackMetalHubBot/8.0 ( mailto:Plokhomentov@example.com )'
+        'User-Agent': 'BlackMetalHubBot/10.0 ( mailto:Plokhomentov@example.com )'
     }
     
     try:
@@ -52,24 +62,18 @@ def fetch_musicbrainz_new_arrivals():
                 seen_albums = set()
                 
                 for rel in releases:
-                    # Вытаскиваем имя исполнителя
                     artist_credit = rel.get("artist-credit", [])
                     if not artist_credit: continue
                     band = artist_credit[0].get("artist", {}).get("name", "").strip()
-                    
-                    # Вытаскиваем название альбома
                     album = rel.get("title", "").strip()
                     
                     if band and album:
-                        # Отсекаем дубликаты разных прессов одного релиза
                         release_key = f"{band} - {album}".lower()
                         if release_key in seen_albums:
                             continue
                         seen_albums.add(release_key)
                         
-                        # Вытаскиваем страну релиза из паспорта альбома
                         country_info = rel.get("country", "")
-                        # Если там двухзначный код (NO, SE), сопоставляем или переводим
                         if country_info == "NO": country_info = "Norway"
                         if country_info == "SE": country_info = "Sweden"
                         if country_info == "FI": country_info = "Finland"
@@ -80,23 +84,21 @@ def fetch_musicbrainz_new_arrivals():
                         
                         flag = COUNTRY_TO_FLAG.get(country_info, "🇳🇴")
                         
-                        # Собираем идеальную строчку по твоему канону массового импорта
+                        # Собираем строчку импорта
                         block = f"{band} - {album} ({current_year})\n{flag} Black Metal\nhttps://youtube.com {current_month_tag}"
                         packs.append(block)
                         
                 if packs:
-                    # Склеиваем релизы через пустую строку и ---
                     return "\n---\n".join(packs)
                     
         return f"🌑 Проверенных полноформатных новинок в базе за {current_month_tag} {current_year} на этой неделе пока не зафиксировано."
         
     except Exception as e:
-        return f"❌ Ошибка агрегатора новинок MusicBrainz API: {str(e)}"
+        return f"❌ Ошибка агрегатора MusicBrainz API: {str(e)}"
 
-def send_to_admin(content_text):
+def send_to_admin(content_text, month_tag, year_val):
     api_url = P + "api.telegram.org" + S + "bot" + BOT_TOKEN + S + "sendMessage"
-    
-    formatted_msg = f"<b>⛓️ НАЙДЕНЫ СВЕЖИЕ РЕЛИЗЫ ИЗ БАЗЫ ЗНАНИЙ ⛓️</b>\n\n<code>{content_text}</code>\n\n<i>👉 Просто нажми на блок выше — текст скопируется. Вставь его мне в чат для авто-наполнения меню месяцев! Превью отключено.</i>"
+    formatted_msg = f"<b>⛓️ УЛОВ МАШИНЫ ВРЕМЕНИ ЗА {month_tag} {year_val} ⛓️</b>\n\n<code>{content_text}</code>\n\n<i>👉 Просто нажми на блок выше — текст скопируется. Вставь его мне в чат! Ютуб-превью отключено автоматически.</i>"
     
     data = urllib.parse.urlencode({
         'chat_id': ADMIN_CHAT_ID, 
@@ -110,4 +112,13 @@ def send_to_admin(content_text):
 
 if __name__ == "__main__":
     final_report = fetch_musicbrainz_new_arrivals()
-    send_to_admin(final_report)
+    
+    # Вытаскиваем теги для красивого заголовка отчета в ТГ
+    m_tag = "JUL"
+    y_val = time.gmtime().tm_year
+    if len(sys.argv) > 2 and sys.argv[1].strip().upper() != "AUTO":
+        m_tag = sys.argv[1].strip().upper()
+    if len(sys.argv) > 2 and sys.argv[2].strip() != "AUTO":
+        y_val = sys.argv[2].strip()
+        
+    send_to_admin(final_report, m_tag, y_val)
