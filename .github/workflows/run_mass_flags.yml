@@ -1,0 +1,29 @@
+name: Run Mass Flags Update
+
+on:
+  workflow_dispatch: # Только ручной запуск кнопкой
+
+jobs:
+  run-mass-script:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Run Mass Flags Script
+        run: python mass_flags.py
+
+      - name: Commit and Push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@://github.com"
+          git add bands_for_github.txt
+          git commit -m "Сдвиг очереди флагов (-40)" || exit 0
+          git push
