@@ -17,26 +17,8 @@ COUNTRY_TO_FLAG = {
     "Ukraine": "🇺🇦", "Russia": "🇷🇺", "Austria": "🇦🇹", "Iceland": "🇮🇸",
     "Poland": "🇵🇱", "Greece": "🇬🇷", "Italy": "🇮🇹", "Switzerland": "🇨🇭",
     "Netherlands": "🇳🇱", "Belgium": "🇧🇪", "Portugal": "🇵🇹", "Spain": "🇪🇸",
-    "Canada": "🇨🇦", "Australia": "🇦🇺", "Brazil": "🇧🇷", "Japan": "🇯🇵"
-}
-
-COUNTRY_MAP = {
-    "NO": "Norway", "SE": "Sweden", "FI": "Finland", "DE": "Germany", 
-    "FR": "France", "US": "United States", "GB": "United Kingdom", 
-    "UK": "United Kingdom", "UA": "Ukraine", "RU": "Russia", 
-    "AT": "Austria", "IS": "Iceland", "PL": "Poland", "GR": "Greece", 
-    "IT": "Italy", "CH": "Switzerland", "NL": "Netherlands", "AU": "Australia"
-}
-
-# --- ЭНЦИКЛОПЕДИЯ СУБЖАНРОВ (SMART GENRE MATCHER) ---
-# Если база выдает размытый тег, этот словарь ставит каноничный стиль!
-GENRE_ENCYCLOPEDIA = {
-    "Iselder": "Crust Black Metal",
-    "Wylk": "Atmospheric Black Metal",
-    "Shroud": "Black Metal",
-    "Black Magick SS": "Psychedelic Black Metal",
-    "Callous Faulter": "Depressive Black Metal",
-    "Halo of Teeth": "Post-Black Metal"
+    "Canada": "🇨🇦", "Australia": "🇦🇺", "Brazil": "🇧🇷", "Japan": "🇯🇵",
+    "Wales": "🏴󠁧󠁢󠁷󠁬󠁳󠁿", "Scotland": "🏴󠁧󠁢󠁳󠁣󠁴󠁿"
 }
 
 def fetch_musicbrainz_new_arrivals():
@@ -57,10 +39,13 @@ def fetch_musicbrainz_new_arrivals():
         if input_year != "AUTO" and input_year.isdigit():
             current_year = int(input_year)
 
+    print(f"🌍 Сканирую базу по цели: {current_month_tag} {current_year}")
+
+    # Запрашиваем релизы, подтягивая данные об артистах (artist-credits)
     query = f'type:album AND status:official AND date:{current_year}-{current_month_num} AND tag:"black metal"'
     url = P + "musicbrainz.org" + S + "ws" + S + "2" + S + "release" + "?query=" + urllib.parse.quote(query) + "&inc=tags+artist-credits&fmt=json&limit=30"
     
-    headers = {'User-Agent': 'BlackMetalHubBot/14.0 ( mailto:Plokhomentov@example.com )'}
+    headers = {'User-Agent': 'BlackMetalHubBot/15.0 ( mailto:Plokhomentov@example.com )'}
     
     try:
         req = urllib.request.Request(url, headers=headers)
@@ -76,29 +61,30 @@ def fetch_musicbrainz_new_arrivals():
                     artist_credit = rel.get("artist-credit", [])
                     if not artist_credit: continue
                     
-                    # Безопасное извлечение данных
-                    if isinstance(artist_credit, list) and len(artist_credit) > 0:
-                        artist_data = artist_credit[0].get("artist", {})
-                    else:
-                        artist_data = artist_credit.get("artist", {})
-                        
+                    # Безопасно извлекаем данные первого артиста
+                    first_artist = artist_credit[0] if isinstance(artist_credit, list) else artist_credit
+                    artist_data = first_artist.get("artist", {})
+                    
                     band = artist_data.get("name", "").strip()
                     album = rel.get("title", "").strip()
                     artist_id = artist_data.get("id", "")
                     
                     if band and album:
+                        # Защита от дубликатов прессов
                         release_key = f"{band} - {album}".lower()
                         if release_key in seen_albums: continue
                         seen_albums.add(release_key)
                         
-                        # ДИНАМИЧЕСКИЙ ПОДБОР ЖАНРА ПО ТЕГАМ
+                        # 🪐 УМНЫЙ АНАЛИЗ ПОДЖАНРОВ (СТРОГАЯ ИЕРАРХИЯ ТЕГОВ)
                         tags_list = [t.get("name", "").lower() for t in rel.get("tags", [])]
+                        # Сюда же добавляем теги самого артиста для точности
+                        tags_list += [t.get("name", "").lower() for t in artist_data.get("tags", [])]
                         tags_str = " ".join(tags_list)
                         
                         detected_subgenre = "Black Metal"
                         if "depressive" in tags_str or "dsbm" in tags_str or "suicidal" in tags_str: 
                             detected_subgenre = "Depressive Black Metal"
-                        elif "atmospheric" in tags_str: 
+                        elif "atmospheric" in tags_str or "ambient" in tags_str: 
                             detected_subgenre = "Atmospheric Black Metal"
                         elif "post-black" in tags_str or "post" in tags_str: 
                             detected_subgenre = "Post-Black Metal"
@@ -113,35 +99,23 @@ def fetch_musicbrainz_new_arrivals():
                         elif "psychedelic" in tags_str: 
                             detected_subgenre = "Psychedelic Black Metal"
                         
-                        # 🔥 КОРРЕКЦИЯ СУБЖАНРА ЧЕРЕЗ SMART ENCYCLOPEDIA
-                        # Если группа есть в нашем списке, ставим идеальный точный стиль
-                        if band in GENRE_ENCYCLOPEDIA:
-                            detected_subgenre = GENRE_ENCYCLOPEDIA[band]
-                        
-                        # ГЛУБОКОЕ БУРЕНИЕ ГЕОГРАФИИ
-                        country_code = rel.get("country", "")
-                        if (not country_code or country_code == "XW") and artist_id:
+                        # 🌍 АВТОНОМНОЕ ГЛУБОКОЕ БУРЕНИЕ СТРАНЫ ПРЯМО ИЗ АНКЕТЫ ГРУППЫ
+                        country_name = "Norway" # Каноничный бэкап
+                        if artist_id:
                             try:
                                 artist_url = P + "musicbrainz.org" + S + "ws" + S + "2" + S + "artist" + S + artist_id + "?fmt=json"
                                 req_art = urllib.request.Request(artist_url, headers=headers)
-                                with urllib.request.urlopen(req_art, timeout=5) as res_art:
+                                with urllib.request.urlopen(req_art, timeout=6) as res_art:
                                     art_data = json.loads(res_art.read().decode('utf-8'))
-                                    country_code = art_data.get("country", "")
-                                    if not country_code:
-                                        area_codes = art_data.get("area", {}).get("iso-3166-1-codes", [])
-                                        if area_codes: country_code = area_codes[0]
-                                time.sleep(1.0)
+                                    
+                                    # Забираем текстовое название домашней области (например, "Germany" или "Wales")
+                                    area_data = art_data.get("area", {})
+                                    if area_data and area_data.get("name"):
+                                        country_name = area_data.get("name").strip()
+                                time.sleep(1.1) # Строгий сетевой лимит API
                             except:
-                                country_code = ""
+                                pass
 
-                        country_name = COUNTRY_MAP.get(str(country_code).upper(), "")
-                        
-                        # Жесткие географические маркеры (100% точность для теста)
-                        if "Iselder" in band: country_name = "United Kingdom"
-                        if "Wylk" in band or "Callous" in band: country_name = "Germany"
-                        if "Shroud" in band or "Magick" in band: country_name = "Australia"
-                        if "Teeth" in band: country_name = "United Kingdom"
-                        
                         flag = COUNTRY_TO_FLAG.get(country_name, "🇳🇴")
                         
                         block = f"{band} - {album} ({current_year})\n{flag} {detected_subgenre}\nhttps://youtube.com {current_month_tag}"
@@ -153,11 +127,11 @@ def fetch_musicbrainz_new_arrivals():
         return f"🌑 Проверенных полноформатных новинок за {current_month_tag} {current_year} пока не зафиксировано."
         
     except Exception as e:
-        return f"❌ Ошибка ULTRA агрегатора: {str(e)}"
+        return f"❌ Ошибка автономного PRO v3.0 агрегатора: {str(e)}"
 
 def send_to_admin(content_text, month_tag, year_val):
     api_url = P + "api.telegram.org" + S + "bot" + BOT_TOKEN + S + "sendMessage"
-    formatted_msg = f"<b>⛓️ ULTRA-УЛОВ ЗА {month_tag} {year_val} ⛓️</b>\n\n<code>{content_text}</code>\n\n<i>👉 Идеальный пак собран! Субжанры и флаги на 100% на своих местах. Скопируй в один тап!</i>"
+    formatted_msg = f"<b>⛓️ АВТОНОМНЫЙ УЛОВ ЗА {month_tag} {year_val} ⛓️</b>\n\n<code>{content_text}</code>\n\n<i>👉 Код очищен от ручных костылей. Скрипт сам залез в анкеты банд и раскопал реальные страны!</i>"
     data = urllib.parse.urlencode({'chat_id': ADMIN_CHAT_ID, 'text': formatted_msg, 'parse_mode': 'HTML', 'disable_web_page_preview': 'true'}).encode('utf-8')
     req = urllib.request.Request(api_url, data=data)
     urllib.request.urlopen(req)
