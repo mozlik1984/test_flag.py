@@ -143,3 +143,4 @@ if __name__ == "__main__":
     if len(sys.argv) > 2 and str(sys.argv[1]).upper() != "AUTO": m_tag = str(sys.argv[1]).upper()
     if len(sys.argv) > 2 and str(sys.argv[2]) != "AUTO": y_val = str(sys.argv[2])
     send_to_admin(final_report, m_tag, y_val)
+    
