@@ -8,7 +8,6 @@ import sys
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_CHAT_ID = 5002053185
 
-# Безопасная ASCII-склейка для защиты от искажений на мобильном
 S = chr(47); C = chr(58); Q = chr(63); E = chr(61)
 P = "https" + C + S + S
 
@@ -38,7 +37,6 @@ def fetch_musicbrainz_new_arrivals():
     current_month_tag = months_map.get(time_struct.tm_mon, "JUL")
     current_month_num = str(time_struct.tm_mon).zfill(2)
     current_year = time_struct.tm_year
-    
     user_corrections = ""
     
     if len(sys.argv) > 2:
@@ -57,7 +55,8 @@ def fetch_musicbrainz_new_arrivals():
     query = f'type:album AND status:official AND date:{current_year} AND tag:"black metal"'
     url = P + "musicbrainz.org" + S + "ws" + S + "2" + S + "release" + "?query=" + urllib.parse.quote(query) + "&inc=tags+artist-credits&fmt=json&limit=100"
     headers = {'User-Agent': 'BlackMetalHubBot/17.0 ( mailto:Plokhomentov@example.com )'}
-        try:
+    
+    try:
         req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=15) as response:
             if response.status == 200:
@@ -176,5 +175,4 @@ if __name__ == "__main__":
     
     final_report = fetch_musicbrainz_new_arrivals()
     send_to_admin(final_report, m_tag, y_val)
-
-    
+                    
