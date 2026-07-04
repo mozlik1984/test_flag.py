@@ -57,89 +57,101 @@ def fetch_musicbrainz_new_arrivals():
     headers = {'User-Agent': 'BlackMetalHubBot/17.0 ( mailto:Plokhomentov@example.com )'}
     
     try:
-        req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=15) as response:
-            if response.status == 200:
-                data = json.loads(response.read().decode('utf-8'))
-                releases = data.get("releases", [])
-                packs = []
-                seen_albums = set()
+        for attempt in range(3):
+            try:
+                req = urllib.request.Request(url, headers=headers)
+                with urllib.request.urlopen(req, timeout=15) as response:
+                    if response.status == 200:
+                        data = json.loads(response.read().decode('utf-8'))
+                        break
+            except urllib.error.HTTPError as he:
+                if he.code == 503 and attempt < 2:
+                    time.sleep(3)
+                    continue
+                raise he
+        else:
+            return "❌ Сервер MusicBrainz перегружен (503). Попробуйте запустить позже."
+
+        releases = data.get("releases", [])
+        packs = []
+        seen_albums = set()
+        
+        for rel in releases:
+            rel_date = rel.get("date", "")
+            if rel_date:
+                date_parts = rel_date.split("-")
+                if len(date_parts) > 1:
+                    if date_parts[1] != current_month_num:
+                        continue
+
+            artist_credit = rel.get("artist-credit", [])
+            if not artist_credit: continue
+            
+            first_artist = artist_credit[0] if isinstance(artist_credit, list) else artist_credit
+            artist_data = first_artist.get("artist", {})
+            band = artist_data.get("name", "").strip()
+            album = rel.get("title", "").strip()
+            artist_id = artist_data.get("id", "")
+            
+            if band and album:
+                release_key = band.lower() + " - " + album.lower()
+                if release_key in seen_albums: continue
+                seen_albums.add(release_key)
                 
-                for rel in releases:
-                    rel_date = rel.get("date", "")
-                    if rel_date:
-                        date_parts = rel_date.split("-")
-                        if len(date_parts) > 1:
-                            if date_parts[1] != current_month_num:
-                                continue
+                tags_list = [t.get("name", "").lower() for t in rel.get("tags", [])]
+                tags_str = " ".join(tags_list)
+                
+                subgenres = []
+                if "hellenic" in tags_str or "greece" in tags_str: subgenres.append("Hellenic Black Metal")
+                if "atmospheric" in tags_str: subgenres.append("Atmospheric Black Metal")
+                if "depressive" in tags_str or "dsbm" in tags_str: subgenres.append("Depressive Black Metal")
+                if "post-black" in tags_str: subgenres.append("Post-Black Metal")
+                if "psychedelic" in tags_str: subgenres.append("Psychedelic Black Metal")
+                if "symphonic" in tags_str: subgenres.append("Symphonic Black Metal")
+                if "raw" in tags_str: subgenres.append("Raw Black Metal")
+                if "melodic" in tags_str: subgenres.append("Melodic Black Metal")
+                if "old school" in tags_str or "first wave" in tags_str: subgenres.append("Old School Black Metal")
+                
+                detected_subgenre = "/".join(subgenres) if subgenres else "Black Metal"
+                
+                country_code = rel.get("country", "")
+                if (not country_code or country_code == "XW") and artist_id:
+                    time.sleep(1.2)
+                    try:
+                        artist_url = P + "musicbrainz.org" + S + "ws" + S + "2" + S + "artist" + S + artist_id + "?inc=aliases&fmt=json"
+                        req_art = urllib.request.Request(artist_url, headers=headers)
+                        with urllib.request.urlopen(req_art, timeout=5) as res_art:
+                            art_data = json.loads(res_art.read().decode('utf-8'))
+                            country_code = art_data.get("country", "")
+                            if not country_code:
+                                area_data = art_data.get("area", {})
+                                iso = area_data.get("iso-3166-1-codes", [])
+                                if iso: country_code = iso[0]
+                    except:
+                        pass
 
-                    artist_credit = rel.get("artist-credit", [])
-                    if not artist_credit: continue
-                    
-                    first_artist = artist_credit[0] if isinstance(artist_credit, list) else artist_credit
-                    artist_data = first_artist.get("artist", {})
-                    band = artist_data.get("name", "").strip()
-                    album = rel.get("title", "").strip()
-                    artist_id = artist_data.get("id", "")
-                    
-                    if band and album:
-                        release_key = band.lower() + " - " + album.lower()
-                        if release_key in seen_albums: continue
-                        seen_albums.add(release_key)
-                        
-                        tags_list = [t.get("name", "").lower() for t in rel.get("tags", [])]
-                        tags_str = " ".join(tags_list)
-                        
-                        subgenres = []
-                        if "hellenic" in tags_str or "greece" in tags_str: subgenres.append("Hellenic Black Metal")
-                        if "atmospheric" in tags_str: subgenres.append("Atmospheric Black Metal")
-                        if "depressive" in tags_str or "dsbm" in tags_str: subgenres.append("Depressive Black Metal")
-                        if "post-black" in tags_str: subgenres.append("Post-Black Metal")
-                        if "psychedelic" in tags_str: subgenres.append("Psychedelic Black Metal")
-                        if "symphonic" in tags_str: subgenres.append("Symphonic Black Metal")
-                        if "raw" in tags_str: subgenres.append("Raw Black Metal")
-                        if "melodic" in tags_str: subgenres.append("Melodic Black Metal")
-                        if "old school" in tags_str or "first wave" in tags_str: subgenres.append("Old School Black Metal")
-                        
-                        detected_subgenre = "/".join(subgenres) if subgenres else "Black Metal"
-                        
-                        country_code = rel.get("country", "")
-                        if (not country_code or country_code == "XW") and artist_id:
-                            try:
-                                artist_url = P + "musicbrainz.org" + S + "ws" + S + "2" + S + "artist" + S + artist_id + "?inc=aliases&fmt=json"
-                                req_art = urllib.request.Request(artist_url, headers=headers)
-                                with urllib.request.urlopen(req_art, timeout=5) as res_art:
-                                    art_data = json.loads(res_art.read().decode('utf-8'))
-                                    country_code = art_data.get("country", "")
-                                    if not country_code:
-                                        area_data = art_data.get("area", {})
-                                        iso = area_data.get("iso-3166-1-codes", [])
-                                        if iso: country_code = iso[0]
-                                time.sleep(0.5)
-                            except: pass
-
-                        country_name = COUNTRY_MAP.get(str(country_code).upper(), "")
-                        flag = COUNTRY_TO_FLAG.get(country_name, "")
-                        
-                        is_deleted = False
-                        if user_corrections and user_corrections != "AUTO":
-                            rules = user_corrections.split(",")
-                            for rule in rules:
-                                if "=" in rule:
-                                    k, v = rule.split("=", 1)
-                                    if k.strip().lower() in band.lower() and "delete" in v.lower(): 
-                                        is_deleted = True
-                        
-                        if is_deleted: continue
-                        flag_prefix = flag + " " if flag else ""
-                        yt_link = "https" + C + S + S + "youtube.com" + S + "results" + Q + "search_query" + E + urllib.parse.quote(band + " " + album)
-                        
-                        block = f"{band} - {album} ({current_year})\n{flag_prefix}{detected_subgenre}\n{yt_link} {current_month_tag}"
-                        packs.append(block)
-                        
-                if packs:
-                    return "\n---\n".join(packs)
-                    
+                country_name = COUNTRY_MAP.get(str(country_code).upper(), "")
+                flag = COUNTRY_TO_FLAG.get(country_name, "")
+                
+                is_deleted = False
+                if user_corrections and user_corrections != "AUTO":
+                    rules = user_corrections.split(",")
+                    for rule in rules:
+                        if "=" in rule:
+                            k, v = rule.split("=", 1)
+                            if k.strip().lower() in band.lower() and "delete" in v.lower(): 
+                                is_deleted = True
+                
+                if is_deleted: continue
+                flag_prefix = flag + " " if flag else ""
+                yt_link = "https" + C + S + S + "youtube.com" + S + "results" + Q + "search_query" + E + urllib.parse.quote(band + " " + album)
+                
+                block = f"{band} - {album} ({current_year})\n{flag_prefix}{detected_subgenre}\n{yt_link} {current_month_tag}"
+                packs.append(block)
+                
+        if packs:
+            return "\n---\n".join(packs)
+            
         return f"🌑 Проверенных полноформатных новинок за {current_month_tag} {current_year} пока не зафиксировано."
     except Exception as e:
         return "❌ Ошибка агрегатора: " + str(e)
@@ -175,4 +187,4 @@ if __name__ == "__main__":
     
     final_report = fetch_musicbrainz_new_arrivals()
     send_to_admin(final_report, m_tag, y_val)
-                    
+    
