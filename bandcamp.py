@@ -1,61 +1,73 @@
 import os
 import urllib.request
 import urllib.parse
+import json
 import time
-import re
 
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_CHAT_ID = 5002053185
 
-# Фирменная склейка, чтобы ссылки не бились на экране мобильного
-S = chr(47); C = chr(58)
+# Фирменная безопасная ASCII-склейка
+S = chr(47); C = chr(58); Q = chr(63); E = chr(61); A = chr(38)
 P = "https" + C + S + S
 W = "www."
 
-def fetch_bandcamp_radar():
-    print("🛰️ Живой радар сканирует Bandcamp...")
+def fetch_bandcamp_final_api():
+    print("🛰️ Попытка прорыва через скрытый JSON-шлюз Bandcamp...")
     
-    # Лезем на открытую страницу тега, где лежат все свежие поджанры
-    url = P + W + "bandcamp.com" + S + "tag" + S + "black-metal"
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    # Скрытый шлюз дискавери, который отдает сырые данные для плееров
+    url = P + W + "bandcamp.com" + S + "api" + S + "discover" + S + "3" + S + "get_web"
+    
+    # Просим у системы самый свежий блэк-метал (сортировка по дате добавления)
+    payload = {
+        "tags": ["black-metal"],
+        "category": "album",
+        "sort_key": "date",
+        "page": 0
+    }
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko)',
+        'Content-Type': 'application/json'
+    }
     
     try:
-        req = urllib.request.Request(url, headers=headers)
+        req_data = json.dumps(payload).encode('utf-8')
+        req = urllib.request.Request(url, data=req_data, headers=headers, method='POST')
+        
         with urllib.request.urlopen(req, timeout=15) as response:
-            html = response.read().decode('utf-8', errors='ignore')
+            if response.status != 200:
+                return "❌ Сервер Bandcamp отклонил запрос плеера."
+            
+            data = json.loads(response.read().decode('utf-8'))
+            
+        results = data.get("items", [])
+        if not results:
+            return "🌑 На скрытой витрине Bandcamp сейчас пусто."
             
         packs = []
-        # Простейший поиск карточек: вытаскивает ссылку, название альбома и группу
-        items = re.findall(r'href="([^"]+album=[^"]+)"[^>]*>.*?<div class="title">([^<]+)</div>.*?<div class="artist">([^<]+)</div>', html, re.DOTALL)
-        
-        if not items:
-            # Запасной простой паттерн, если первый не сработает
-            items = re.findall(r'href="([^"]+album=[^"]+)">([^<]+)</a>\s*by\s*<span class="artist">([^<]+)</span>', html)
-
-        for album_url, album_name, band_name in items[:7]:
-            band = band_name.strip()
-            album = album_name.strip()
+        for item in results[:7]:  # Берем ровно 7 самых свежих альбомов дня
+            band = item.get("artist_name", "Unknown Artist").strip()
+            album = item.get("title", "Unknown Album").strip()
+            album_url = item.get("url", "").strip()
             
-            # Собираем красивую монолитную ссылку
-            if not album_url.startswith("http"):
-                album_url = "https:" + album_url if album_url.startswith("//") else P + W + "bandcamp.com" + album_url
+            if not album_url: continue
+            
+            # Принудительно чистим и склеиваем монолитную ссылку
+            clean_url = album_url.split('?')[0]
+            if "://" in clean_url and "://www." not in clean_url:
+                clean_url = clean_url.replace("://", "://" + W)
                 
-            clean_url = album_url.split('?')[0] # убираем мусор из хвоста ссылки
+            # Собираем красивую текстовую строку
+            block = band + " - " + album + "\n🇳🇴 Black Metal\n" + clean_url
+            packs.append(block)
             
-            # Автоматически определяем поджанр по тексту страницы (атмо, депрессив и т.д.)
-            subgenre = "Black Metal"
-            if "atmospheric" in html.lower(): subgenre = "Atmospheric Black Metal"
-            elif "depressive" in html.lower() or "dsbm" in html.lower(): subgenre = "Depressive Black Metal"
-            elif "symphonic" in html.lower(): subgenre = "Symphonic Black Metal"
-            
-            packs.append(band + " - " + album + "\n🇳🇴 " + subgenre + "\n" + clean_url)
-            
-        if packs: 
+        if packs:
             return "\n---\n".join(packs)
-        return "🌑 Свежего блэка на витрине Bandcamp прямо сейчас не найдено."
+        return "🌑 Свежих релизов в пакете API не обнаружено."
         
     except Exception as e:
-        return "❌ Ошибка радара: " + str(e)
+        return "❌ Ошибка прорыва через API: " + str(e)
 
 def send_to_admin(content_text):
     api_url = P + "api.telegram.org" + S + "bot" + BOT_TOKEN + S + "sendMessage"
@@ -66,6 +78,6 @@ def send_to_admin(content_text):
     urllib.request.urlopen(req)
 
 if __name__ == "__main__":
-    report = fetch_bandcamp_radar()
+    report = fetch_bandcamp_api() if 'fetch_bandcamp_api' in globals() else fetch_bandcamp_final_api()
     send_to_admin(report)
     
