@@ -25,4 +25,6 @@ jobs:
           python-version: '3.10'
 
       - name: Run Bandcamp Parser
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
         run: python bandcamp.py "${{ github.event.inputs.month }}" "${{ github.event.inputs.year }}"
