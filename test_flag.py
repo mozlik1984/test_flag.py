@@ -114,21 +114,24 @@ def fetch_musicbrainz_new_arrivals():
                 
                 detected_subgenre = "/".join(subgenres) if subgenres else "Black Metal"
                 
-                country_code = rel.get("country", "")
-                if (not country_code or country_code == "XW") and artist_id:
+                country_code = ""
+                if artist_id:
                     time.sleep(1.2)
                     try:
-                        artist_url = P + "musicbrainz.org" + S + "ws" + S + "2" + S + "artist" + S + artist_id + "?inc=aliases&fmt=json"
+                        artist_url = P + "musicbrainz.org" + S + "ws" + S + "2" + S + "artist" + S + artist_id + "?fmt=json"
                         req_art = urllib.request.Request(artist_url, headers=headers)
                         with urllib.request.urlopen(req_art, timeout=5) as res_art:
                             art_data = json.loads(res_art.read().decode('utf-8'))
                             country_code = art_data.get("country", "")
                             if not country_code:
                                 area_data = art_data.get("area", {})
-                                iso = area_data.get("iso-3166-1-codes", [])
-                                if iso: country_code = iso[0]
+                                iso_codes = area_data.get("iso-3166-1-codes", [])
+                                if iso_codes: country_code = iso_codes[0]
                     except:
                         pass
+
+                if not country_code:
+                    country_code = rel.get("country", "")
 
                 country_name = COUNTRY_MAP.get(str(country_code).upper(), "")
                 flag = COUNTRY_TO_FLAG.get(country_name, "")
