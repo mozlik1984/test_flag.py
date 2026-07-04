@@ -28,5 +28,7 @@ jobs:
           python-version: '3.10'
 
       - name: Run Test Script
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
         # Передаем введенные тобой месяц и год в Python-скрипт
         run: python test_flag.py "${{ github.event.inputs.month }}" "${{ github.event.inputs.year }}"
