@@ -1,16 +1,9 @@
 name: Run Bandcamp Underground Collector
 
 on:
-  workflow_dispatch:
-    inputs:
-      month:
-        description: 'Месяц (капсом: JAN, FEB, MAR) или AUTO'
-        required: true
-        default: 'AUTO'
-      year:
-        description: 'Год релиза (например, 2026, 2025) или AUTO'
-        required: true
-        default: 'AUTO'
+  workflow_dispatch: # Позволяет запускать кнопкой в любую секунду!
+  schedule:
+    - cron: '0 12 * * 1' # Сам запускается каждый понедельник в 12:00 по Гринвичу
 
 jobs:
   run-bandcamp-script:
@@ -27,4 +20,5 @@ jobs:
       - name: Run Bandcamp Parser
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-        run: python bandcamp.py "${{ github.event.inputs.month }}" "${{ github.event.inputs.year }}"
+        run: python bandcamp.py
+        
