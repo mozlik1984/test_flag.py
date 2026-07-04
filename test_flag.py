@@ -9,7 +9,9 @@ import re
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_CHAT_ID = 5002053185
 
-S = chr(47); C = chr(58); P = "https" + C + S + S
+# Фирменная безопасная ASCII-склейка для защиты от искажений на мобильном
+S = chr(47); C = chr(58)
+P = "https" + C + S + S
 
 COUNTRY_TO_FLAG = {
     "Norway": "🇳🇴", "Sweden": "🇸🇪", "Finland": "🇫🇮", "Germany": "🇩🇪",
@@ -18,7 +20,7 @@ COUNTRY_TO_FLAG = {
     "Poland": "🇵🇱", "Greece": "🇬🇷", "Italy": "🇮🇹", "Switzerland": "🇨🇭",
     "Netherlands": "🇳🇱", "Belgium": "🇧🇪", "Portugal": "🇵🇹", "Spain": "🇪🇸",
     "Canada": "🇨🇦", "Australia": "🇦🇺", "Brazil": "🇧🇷", "Japan": "🇯🇵",
-    "Wales": "🏴󠁧󠁢󠁷󠁬󠁳󠁿"
+    "Wales": "🏴󠁧󠁢🇺󠁬󠁳󠁿"
 }
 
 COUNTRY_MAP = {
@@ -39,6 +41,8 @@ def fetch_musicbrainz_new_arrivals():
     current_year = time_struct.tm_year
     
     user_corrections = ""
+    
+    # Исправлено безопасное считывание параметров с экрана GitHub
     if len(sys.argv) > 2:
         input_month = str(sys.argv[1]).strip().upper()
         input_year = str(sys.argv[2]).strip()
@@ -50,7 +54,10 @@ def fetch_musicbrainz_new_arrivals():
         if input_year != "AUTO" and input_year.isdigit():
             current_year = int(input_year)
 
-    query = f'type:album AND status:official AND date:{current_year}-{current_month_num} AND tag:"black metal"'
+    print("🛰️ Поиск в архивах MusicBrainz по цели: " + current_month_tag + " " + str(current_year))
+    
+    # Строим строгий поисковый запрос к базе данных релизов
+    query = 'type:album AND status:official AND date:' + str(current_year) + '-' + current_month_num + ' AND tag:"black metal"'
     url = P + "musicbrainz.org" + S + "ws" + S + "2" + S + "release" + "?query=" + urllib.parse.quote(query) + "&inc=tags+artist-credits&fmt=json&limit=30"
     
     headers = {'User-Agent': 'BlackMetalHubBot/17.0 ( mailto:Plokhomentov@example.com )'}
@@ -77,11 +84,11 @@ def fetch_musicbrainz_new_arrivals():
                     artist_id = artist_data.get("id", "")
                     
                     if band and album:
-                        release_key = f"{band} - {album}".lower()
+                        release_key = band.lower() + " - " + album.lower()
                         if release_key in seen_albums: continue
                         seen_albums.add(release_key)
                         
-                        # Честный подбор жанров
+                        # Автоматическое определение поджанров по тегам базы
                         tags_list = [t.get("name", "").lower() for t in rel.get("tags", [])]
                         tags_str = " ".join(tags_list)
                         detected_subgenre = "Black Metal"
@@ -89,8 +96,9 @@ def fetch_musicbrainz_new_arrivals():
                         elif "depressive" in tags_str or "dsbm" in tags_str: detected_subgenre = "Depressive Black Metal"
                         elif "post-black" in tags_str: detected_subgenre = "Post-Black Metal"
                         elif "psychedelic" in tags_str: detected_subgenre = "Psychedelic Black Metal"
+                        elif "symphonic" in tags_str: detected_subgenre = "Symphonic Black Metal"
                         
-                        # Честный поиск стран
+                        # Поиск страны
                         country_code = rel.get("country", "")
                         if (not country_code or country_code == "XW") and artist_id:
                             try:
@@ -99,14 +107,13 @@ def fetch_musicbrainz_new_arrivals():
                                 with urllib.request.urlopen(req_art, timeout=5) as res_art:
                                     art_data = json.loads(res_art.read().decode('utf-8'))
                                     country_code = art_data.get("country", "")
-                                time.sleep(1.0)
+                                time.sleep(0.5)
                             except: pass
 
                         country_name = COUNTRY_MAP.get(str(country_code).upper(), "")
-                        # ИСПРАВЛЕНО: Никакой дефолтной Норвегии! Если пусто — флага просто не будет
                         flag = COUNTRY_TO_FLAG.get(country_name, "")
                         
-                        # Админский фильтр правок (если нужно что-то удалить)
+                        # Админские ручные правки удаления
                         is_deleted = False
                         if user_corrections and user_corrections != "AUTO":
                             rules = user_corrections.split(",")
@@ -118,29 +125,37 @@ def fetch_musicbrainz_new_arrivals():
                         
                         if is_deleted: continue
                         
-                        # Аккуратный пробел, только если флаг существует
                         flag_prefix = flag + " " if flag else ""
-                        block = f"{band} - {album} ({current_year})\n{flag_prefix}{detected_subgenre}\nhttps://youtube.com {current_month_tag}"
+                        
+                        # Ссылка-заглушка на поиск в YouTube собранная через склейку строк
+                        yt_link = P + "www.youtube.com" + S + "results" + Q + "search_query" + E + urllib.parse.quote(band + " " + album)
+                        
+                        block = band + " - " + album + " (" + str(current_year) + ")\n" + flag_prefix + detected_subgenre + "\n" + yt_link + " " + current_month_tag
                         packs.append(block)
                         
                 if packs:
                     return "\n---\n".join(packs)
                     
-        return f"🌑 Проверенных полноформатных новинок за {current_month_tag} {current_year} пока не зафиксировано."
+        return "🌑 Проверенных полноформатных новинок за " + current_month_tag + " " + str(current_year) + " пока не зафиксировано."
     except Exception as e:
-        return f"❌ Ошибка агрегатора: {str(e)}"
+        return "❌ Ошибка агрегатора: " + str(e)
 
 def send_to_admin(content_text, month_tag, year_val):
     api_url = P + "api.telegram.org" + S + "bot" + BOT_TOKEN + S + "sendMessage"
-    formatted_msg = f"<b>⛓️ ЧИСТЫЙ АВТОНОМНЫЙ УЛОВ ЗА {month_tag} {year_val} ⛓️</b>\n\n<code>{content_text}</code>\n\n<i>👉 Ложные флаги отключены. Если страны нет в базе, альбом запишется чистым! Тапни для копирования.</i>"
+    formatted_msg = "<b>⛓️ ЧИСТЫЙ АВТОНОМНЫЙ УЛОВ ЗА " + month_tag + " " + str(year_val) + " ⛓️</b>\n\n<code>" + content_text + "</code>\n\n<i>👉 Ложные флаги отключены. Если страны нет в базе, альбом запишется чистым! Тапни для копирования.</i>"
     data = urllib.parse.urlencode({'chat_id': ADMIN_CHAT_ID, 'text': formatted_msg, 'parse_mode': 'HTML', 'disable_web_page_preview': 'true'}).encode('utf-8')
     req = urllib.request.Request(api_url, data=data)
     urllib.request.urlopen(req)
 
 if __name__ == "__main__":
-    final_report = fetch_musicbrainz_new_arrivals()
-    m_tag = "JUL"
-    y_val = time.gmtime().tm_year
+    months_map = {1: "JAN", 2: "FEB", 3: "MAR", 4: "APR", 5: "MAY", 6: "JUN", 7: "JUL", 8: "AUG", 9: "SEP", 10: "OCT", 11: "NOV", 12: "DEC"}
+    time_struct = time.gmtime()
+    m_tag = months_map.get(time_struct.tm_mon, "JUL")
+    y_val = time_struct.tm_year
+    
     if len(sys.argv) > 2 and str(sys.argv[1]).upper() != "AUTO": m_tag = str(sys.argv[1]).upper()
     if len(sys.argv) > 2 and str(sys.argv[2]) != "AUTO": y_val = str(sys.argv[2])
+    
+    final_report = fetch_musicbrainz_new_arrivals()
     send_to_admin(final_report, m_tag, y_val)
+                        
