@@ -13,7 +13,7 @@ on:
         default: 'AUTO'
         
   schedule:
-    - cron: '0 12 * * 1' # Авто-запуск по понедельникам всегда работает в режиме AUTO
+    - cron: '0 12 * * 1'
 
 jobs:
   run-script:
@@ -30,5 +30,8 @@ jobs:
       - name: Run Test Script
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-        # Передаем введенные тобой месяц и год в Python-скрипт
-        run: python test_flag.py "${{ github.event.inputs.month }}" "${{ github.event.inputs.year }}"
+        run: |
+          IN_MONTH="${{ github.event.inputs.month }}"
+          IN_YEAR="${{ github.event.inputs.year }}"
+          python test_flag.py "${IN_MONTH:-AUTO}" "${IN_YEAR:-AUTO}"
+          
