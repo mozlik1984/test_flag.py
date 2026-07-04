@@ -9,7 +9,7 @@ import re
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_CHAT_ID = 5002053185
 
-# Ваша фирменная склейка символов для защиты от искажений на телефоне
+# Фирменная безопасная ASCII-склейка
 S = chr(47); C = chr(58); Q = chr(63); E = chr(61); A = chr(38)
 P = "https" + C + S + S
 W = "www."
@@ -22,7 +22,6 @@ def fetch_bandcamp_rss_machine():
     current_month_tag = months_map.get(time_struct.tm_mon, "JUL")
     current_year = time_struct.tm_year
     
-    # Считываем инпуты с GitHub
     if len(sys.argv) > 2:
         input_month = str(sys.argv[1]).strip().upper()
         input_year = str(sys.argv[2]).strip()
@@ -31,9 +30,6 @@ def fetch_bandcamp_rss_machine():
         if input_year != "AUTO" and input_year.isdigit():
             current_year = int(input_year)
             
-    print("🔮 Запуск машины Bandcamp по цели: " + current_month_tag + " " + str(current_year))
-    
-    # Безопасная сборка URL ленты через склейку переменных
     url = P + W + "bandcamp.com" + S + "discover" + S + "black-metal" + S + "t" + S + "album"
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
     
@@ -43,18 +39,16 @@ def fetch_bandcamp_rss_machine():
             html_content = response.read().decode('utf-8', errors='ignore')
             
         packs = []
-        
-        # Парсим динамический список из текущей открытой ленты Bandcamp
         titles = re.findall(r'href="([^"]+album=[^"]+)">([^<]+)</a>\s*by\s*<span class="artist">([^<]+)</span>', html_content)
         
         for album, band in titles[:7]:
             b_name = band.strip()
             a_name = album.strip()
-            
-            # Собираем монолитную ссылку: добавляем https://bandcamp.com на случай обрезки
             base_link = P + W + "bandcamp.com"
             
-            packs.append(b_name + " - " + a_name + " (" + str(current_year") + ")\n🇳🇴 Black Metal\n" + base_link + " " + current_month_tag)
+            # ИСПРАВЛЕНО: Полностью чистая строка без синтаксических ошибок внутри str()
+            block = b_name + " - " + a_name + " (" + str(current_year) + ")\n🇳🇴 Black Metal\n" + base_link + " " + current_month_tag
+            packs.append(block)
             
         if packs: 
             return "\n---\n".join(packs)
@@ -64,11 +58,8 @@ def fetch_bandcamp_rss_machine():
         return "❌ Ошибка машины Bandcamp: " + str(e)
 
 def send_to_admin(content_text, month_tag, year_val):
-    # Безопасный URL для отправки сообщения в Telegram
     api_url = P + "api.telegram.org" + S + "bot" + BOT_TOKEN + S + "sendMessage"
-    
     formatted_msg = "<b>⛓️ БАНДКЭМП-УЛОВ ЗА " + month_tag + " " + str(year_val) + " ⛓️</b>\n\n<code>" + content_text + "</code>\n\n<i>👉 Скопируй в один тап! Вставь боту в чат для наполнения кнопки " + month_tag + "! Превью ссылок отключено.</i>"
-    
     data = urllib.parse.urlencode({'chat_id': ADMIN_CHAT_ID, 'text': formatted_msg, 'parse_mode': 'HTML', 'disable_web_page_preview': 'true'}).encode('utf-8')
     req = urllib.request.Request(api_url, data=data)
     urllib.request.urlopen(req)
@@ -79,10 +70,9 @@ if __name__ == "__main__":
     m_tag = months_map.get(time_struct.tm_mon, "JUL")
     y_val = time_struct.tm_year
     
-    if len(sys.argv) > 2 and str(sys.argv[1]).strip().upper() != "AUTO": 
-        m_tag = str(sys.argv[1]).strip().upper()
-    if len(sys.argv) > 2 and str(sys.argv[2]).strip() != "AUTO": 
-        y_val = str(sys.argv[2]).strip()
+    if len(sys.argv) > 2:
+        if str(sys.argv[1]).strip().upper() != "AUTO": m_tag = str(sys.argv[1]).strip().upper()
+        if str(sys.argv[2]).strip() != "AUTO": y_val = str(sys.argv[2]).strip()
         
     report = fetch_bandcamp_rss_machine()
     send_to_admin(report, m_tag, y_val)
