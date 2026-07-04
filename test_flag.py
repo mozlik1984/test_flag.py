@@ -11,6 +11,7 @@ ADMIN_CHAT_ID = 5002053185
 
 # Фирменная безопасная ASCII-склейка для защиты от искажений на мобильном
 S = chr(47); C = chr(58)
+Q = chr(63); E = chr(61)  # ИСПРАВЛЕНО: Добавлены знаки ? (Q) и = (E)
 P = "https" + C + S + S
 
 COUNTRY_TO_FLAG = {
@@ -20,7 +21,7 @@ COUNTRY_TO_FLAG = {
     "Poland": "🇵🇱", "Greece": "🇬🇷", "Italy": "🇮🇹", "Switzerland": "🇨🇭",
     "Netherlands": "🇳🇱", "Belgium": "🇧🇪", "Portugal": "🇵🇹", "Spain": "🇪🇸",
     "Canada": "🇨🇦", "Australia": "🇦🇺", "Brazil": "🇧🇷", "Japan": "🇯🇵",
-    "Wales": "🏴󠁧󠁢🇺󠁬󠁳󠁿"
+    "Wales": "🏴🇺"
 }
 
 COUNTRY_MAP = {
@@ -127,7 +128,7 @@ def fetch_musicbrainz_new_arrivals():
                         
                         flag_prefix = flag + " " if flag else ""
                         
-                        # Ссылка-заглушка на поиск в YouTube собранная через склейку строк
+                        # Ссылка-заглушка на поиск в YouTube (ИСПРАВЛЕНО)
                         yt_link = P + "www.youtube.com" + S + "results" + Q + "search_query" + E + urllib.parse.quote(band + " " + album)
                         
                         block = band + " - " + album + " (" + str(current_year) + ")\n" + flag_prefix + detected_subgenre + "\n" + yt_link + " " + current_month_tag
@@ -141,11 +142,17 @@ def fetch_musicbrainz_new_arrivals():
         return "❌ Ошибка агрегатора: " + str(e)
 
 def send_to_admin(content_text, month_tag, year_val):
+    if not BOT_TOKEN:
+        print("Ошибка: Токен Telegram (TELEGRAM_TOKEN) не найден в переменных окружения.")
+        return
     api_url = P + "api.telegram.org" + S + "bot" + BOT_TOKEN + S + "sendMessage"
     formatted_msg = "<b>⛓️ ЧИСТЫЙ АВТОНОМНЫЙ УЛОВ ЗА " + month_tag + " " + str(year_val) + " ⛓️</b>\n\n<code>" + content_text + "</code>\n\n<i>👉 Ложные флаги отключены. Если страны нет в базе, альбом запишется чистым! Тапни для копирования.</i>"
     data = urllib.parse.urlencode({'chat_id': ADMIN_CHAT_ID, 'text': formatted_msg, 'parse_mode': 'HTML', 'disable_web_page_preview': 'true'}).encode('utf-8')
     req = urllib.request.Request(api_url, data=data)
-    urllib.request.urlopen(req)
+    try:
+        urllib.request.urlopen(req)
+    except Exception as e:
+        print("Ошибка отправки в Telegram:", e)
 
 if __name__ == "__main__":
     months_map = {1: "JAN", 2: "FEB", 3: "MAR", 4: "APR", 5: "MAY", 6: "JUN", 7: "JUL", 8: "AUG", 9: "SEP", 10: "OCT", 11: "NOV", 12: "DEC"}
@@ -158,4 +165,4 @@ if __name__ == "__main__":
     
     final_report = fetch_musicbrainz_new_arrivals()
     send_to_admin(final_report, m_tag, y_val)
-                        
+                
