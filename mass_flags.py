@@ -1,10 +1,11 @@
+import os
 import urllib.request
 import urllib.parse
 import json
 import time
 import os
 
-BOT_TOKEN = "8615944325:AAFzRUmPbUzGtmBHUy4F4gp_gLd3dFBHAd0"
+BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_CHAT_ID = 5002053185
 
 S = chr(47); C = chr(58); P = "https" + C + S + S
