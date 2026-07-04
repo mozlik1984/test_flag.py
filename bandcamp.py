@@ -9,7 +9,9 @@ import re
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_CHAT_ID = 5002053185
 
-S = chr(47); C = chr(58); P = "https" + C + S + S
+# Ваша фирменная склейка для защиты ссылок от скрытия на телефоне
+S = chr(47); C = chr(58); Q = chr(63); E = chr(61); A = chr(38)
+P = "https" + C + S + S + "www."
 
 COUNTRY_TO_FLAG = {
     "Norway": "🇳🇴", "Sweden": "🇸🇪", "Finland": "🇫🇮", "Germany": "🇩🇪",
@@ -62,7 +64,7 @@ def fetch_bandcamp_rss_machine():
     current_month_tag = months_map.get(time_struct.tm_mon, "JUL")
     current_year = time_struct.tm_year
     
-    # ИСПРАВЛЕНО: Теперь аргументы считываются идеально!
+    # Исправленное чтение аргументов
     if len(sys.argv) > 2:
         input_month = str(sys.argv[1]).strip().upper()
         input_year = str(sys.argv[2]).strip()
@@ -71,65 +73,79 @@ def fetch_bandcamp_rss_machine():
         if input_year != "AUTO" and input_year.isdigit():
             current_year = int(input_year)
             
-    print(f"🔮 Запуск честного парсинга Bandcamp по цели: {current_month_tag} {current_year}")
+    print(f"🔮 Машина времени Bandcamp активирована: поиск {current_month_tag} {current_year}")
     
-    url = P + "://bandcamp.com"
-    params = {
-        "tags": "black-metal",
-        "category": "album",
-        "sort_key": "date",
-        "page": 0
-    }
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    packs = []
+    seen = set()
     
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Content-Type': 'application/json'
-    }
+    # Листаем глубже, если затребован архивный месяц/год
+    max_pages = 8 if current_year < time_struct.tm_year or current_month_tag != months_map.get(time_struct.tm_mon) else 2
     
     try:
-        req_data = json.dumps(params).encode('utf-8')
-        req = urllib.request.Request(url, data=req_data, headers=headers, method='POST')
-        
-        with urllib.request.urlopen(req, timeout=15) as response:
-            data = json.loads(response.read().decode('utf-8'))
+        for page in range(1, max_pages + 1):
+            print(f"🔎 Сканируем страницу {page}...")
+            # Безопасная сборка URL для парсинга через переменные
+            url = P + "bandcamp.com" + S + "tag" + S + "black-metal" + Q + "tab" + E + "all_releases" + A + "page" + E + str(page)
             
-        items = data.get("items", [])
-        packs = []
-        
-        for item in items:
-            album_url = item.get("url")
-            album_name = item.get("title")
-            band_name = item.get("artist_name")
-            
-            if not album_url or not album_name or not band_name: continue
-            
-            if not album_url.startswith("http"):
-                album_url = "https:" + album_url if album_url.startswith("//") else P + "bandcamp.com" + album_url
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=15) as response:
+                html_content = response.read().decode('utf-8', errors='ignore')
                 
-            time.sleep(1.0)
-            rel_year, rel_month, subgenre, flag = get_real_release_date_and_meta(album_url, headers)
+            items = re.findall(r'href="([^"]+album=[^"]+?)"[^>]*>.*?<div class="title">([^<]+)</div>.*?<div class="artist">([^<]+)</div>', html_content, re.DOTALL)
             
-            # Строгая проверка совпадения года и месяца релиза
-            if rel_year and rel_year != current_year:
-                continue
-            if rel_month and rel_month != current_month_tag:
-                continue
+            if not items:
+                items = re.findall(r'href="([^"]+album=[^"]+)">([^<]+)</a>\s*by\s*<span class="artist">([^<]+)</span>', html_content)
                 
-            flag_str = f"{flag} " if flag else ""
-            clean_url = album_url.split('?')[0]
+            if not items: break
             
-            packs.append(f"{band_name} - {album_name} ({current_year})\n{flag_str}{subgenre}\n{clean_url} {current_month_tag}")
+            for album_url, album_name, band_name in items:
+                band_name = band_name.strip()
+                album_name = album_name.strip()
+                key = f"{band_name} - {album_name}".lower()
+                
+                if key in seen: continue
+                seen.add(key)
+                
+                # Принудительно чистим ссылки и добавляем www через склейку
+                if "bandcamp.com" in album_url:
+                    # Выдергиваем поддомен группы (например, https://bandcamp.com)
+                    subdomain_match = re.search(r'https?://([^/]+)', album_url)
+                    if subdomain_match:
+                        subdomain = subdomain_match.group(1)
+                        if not subdomain.startswith("www.") and subdomain.count('.') == 1:
+                            subdomain = "www." + subdomain
+                        album_path = album_url.split("bandcamp.com")[-1].split('?')[0]
+                        final_link = "https" + C + S + S + subdomain + album_path
+                    else:
+                        final_link = album_url.split('?')[0]
+                else:
+                    final_link = P + "bandcamp.com" + album_url.split('?')[0]
+                
+                time.sleep(0.8)
+                rel_year, rel_month, subgenre, flag = get_real_release_date_and_meta(final_link, headers)
+                
+                if rel_year and rel_year != current_year:
+                    continue
+                if rel_month and rel_month != current_month_tag:
+                    continue
+                    
+                flag_str = f"{flag} " if flag else ""
+                
+                packs.append(f"{band_name} - {album_name} ({current_year})\n{flag_str}{subgenre}\n{final_link} {current_month_tag}")
+                
+                if len(packs) >= 7: break
             if len(packs) >= 7: break
             
         if packs: 
             return "\n---\n".join(packs)
-        return f"🌑 Честных новинок за {current_month_tag} {current_year} в текущих архивах ленты Bandcamp не обнаружено."
+        return f"🌑 Честных новинок за {current_month_tag} {current_year} в архивах ленты Bandcamp не обнаружено."
         
     except Exception as e:
         return f"❌ Ошибка машины Bandcamp: {str(e)}"
 
 def send_to_admin(content_text, month_tag, year_val):
-    api_url = P + "api.telegram.org" + S + "bot" + BOT_TOKEN + S + "sendMessage"
+    api_url = "https" + C + S + S + "api.telegram.org" + S + "bot" + BOT_TOKEN + S + "sendMessage"
     formatted_msg = f"<b>⛓️ БАНДКЭМП-УЛОВ ЗА {month_tag} {year_val} ⛓️</b>\n\n<code>{content_text}</code>\n\n<i>👉 Скопируй в один тап! Вставь боту в чат для наполнения кнопки {month_tag}! Превью ссылок отключено.</i>"
     data = urllib.parse.urlencode({'chat_id': ADMIN_CHAT_ID, 'text': formatted_msg, 'parse_mode': 'HTML', 'disable_web_page_preview': 'true'}).encode('utf-8')
     req = urllib.request.Request(api_url, data=data)
