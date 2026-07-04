@@ -3,77 +3,82 @@ import urllib.request
 import urllib.parse
 import json
 import time
-import sys
 import re
 
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_CHAT_ID = 5002053185
 
-# Фирменная безопасная ASCII-склейка
+# Ваша фирменная ASCII-склейка для монолитных ссылок на мобилке
 S = chr(47); C = chr(58); Q = chr(63); E = chr(61); A = chr(38)
 P = "https" + C + S + S
 W = "www."
 
-def fetch_bandcamp_rss_machine():
-    months_map = {1: "JAN", 2: "FEB", 3: "MAR", 4: "APR", 5: "MAY", 6: "JUN", 7: "JUL", 8: "AUG", 9: "SEP", 10: "OCT", 11: "NOV", 12: "DEC"}
-    months_num_map = {"JAN": "01", "FEB": "02", "MAR": "03", "APR": "04", "MAY": "05", "JUN": "06", "JUL": "07", "AUG": "08", "SEP": "09", "OCT": "10", "NOV": "11", "DEC": "12"}
+def fetch_bandcamp_live_radar():
+    print("🛰️ Запуск живого радара Bandcamp... Ищем свежий блэк-метал!")
     
-    time_struct = time.gmtime()
-    current_month_tag = months_map.get(time_struct.tm_mon, "JUL")
-    current_year = time_struct.tm_year
-    
-    if len(sys.argv) > 2:
-        input_month = str(sys.argv[1]).strip().upper()
-        input_year = str(sys.argv[2]).strip()
-        if input_month != "AUTO" and input_month in months_num_map:
-            current_month_tag = input_month
-        if input_year != "AUTO" and input_year.isdigit():
-            current_year = int(input_year)
-            
-    url = P + W + "bandcamp.com" + S + "discover" + S + "black-metal" + S + "t" + S + "album"
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    # URL страницы discover
+    url = P + W + "bandcamp.com" + S + "discover" + S + "black-metal"
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
     
     try:
         req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=15) as response:
             html_content = response.read().decode('utf-8', errors='ignore')
             
-        packs = []
-        titles = re.findall(r'href="([^"]+album=[^"]+)">([^<]+)</a>\s*by\s*<span class="artist">([^<]+)</span>', html_content)
-        
-        for album, band in titles[:7]:
-            b_name = band.strip()
-            a_name = album.strip()
-            base_link = P + W + "bandcamp.com"
+        # Вытаскиваем скрытый JSON с данными всех альбомов на странице
+        blob_match = re.search(r'data-blob="([^"]+)"', html_content)
+        if not blob_match:
+            return "❌ Не удалось прочитать карту данных Bandcamp (возможно, изменилась верстка)."
             
-            # ИСПРАВЛЕНО: Полностью чистая строка без синтаксических ошибок внутри str()
-            block = b_name + " - " + a_name + " (" + str(current_year) + ")\n🇳🇴 Black Metal\n" + base_link + " " + current_month_tag
+        # Декодируем HTML-символы в чистый текст JSON
+        raw_json = urllib.parse.unquote(blob_match.group(1)).replace('&quot;', '"').replace('&amp;', '&')
+        data = json.loads(raw_json)
+        
+        # Пробиваем путь до списка альбомов в структуре Bandcamp
+        discover_data = data.get("discover", {})
+        results = discover_data.get("results", [])
+        
+        if not results:
+            return "🌑 Свежих альбомов на витрине Bandcamp прямо сейчас не обнаружено."
+            
+        packs = []
+        for item in results[:8]: # Берем топ-8 самых свежих релизов с витрины
+            band = item.get("artist_name", "Unknown Band").strip()
+            album = item.get("title", "Unknown Album").strip()
+            album_url = item.get("url", "").strip()
+            
+            if not album_url: continue
+            
+            # Принудительно собираем красивую ссылку с www. через вашу склейку
+            if "bandcamp.com" in album_url:
+                clean_url = album_url.split('?')[0] # Отрезаем мусор
+                if "://www." not in clean_url:
+                    clean_url = clean_url.replace("://", "://" + W)
+            else:
+                clean_url = P + W + "bandcamp.com" + album_url
+                
+            # Формируем красивый блок. Страну ставим дефолтную, так как в быстром списке её нет
+            block = band + " - " + album + "\n🇳🇴 Black Metal\n" + clean_url
             packs.append(block)
             
-        if packs: 
+        if packs:
             return "\n---\n".join(packs)
-        return "🌑 Новинок за " + current_month_tag + " " + str(current_year) + " в архивах ленты пока не найдено."
+        return "🌑 Витрина Bandcamp пуста."
         
     except Exception as e:
-        return "❌ Ошибка машины Bandcamp: " + str(e)
+        return "❌ Ошибка живого радара: " + str(e)
 
-def send_to_admin(content_text, month_tag, year_val):
+def send_to_admin(content_text):
     api_url = P + "api.telegram.org" + S + "bot" + BOT_TOKEN + S + "sendMessage"
-    formatted_msg = "<b>⛓️ БАНДКЭМП-УЛОВ ЗА " + month_tag + " " + str(year_val) + " ⛓️</b>\n\n<code>" + content_text + "</code>\n\n<i>👉 Скопируй в один тап! Вставь боту в чат для наполнения кнопки " + month_tag + "! Превью ссылок отключено.</i>"
+    
+    # Красивый заголовок без привязки к старым датам
+    formatted_msg = "<b>⛓️ СВЕЖИЙ АВТОНОМНЫЙ БАНДКЭМП-УЛОВ ⛓️</b>\n\n<code>" + content_text + "</code>\n\n<i>👉 Скопируй в один тап! Вставь боту в чат для наполнения кнопки СВЕЖЕЕ! Превью отключено.</i>"
+    
     data = urllib.parse.urlencode({'chat_id': ADMIN_CHAT_ID, 'text': formatted_msg, 'parse_mode': 'HTML', 'disable_web_page_preview': 'true'}).encode('utf-8')
     req = urllib.request.Request(api_url, data=data)
     urllib.request.urlopen(req)
 
 if __name__ == "__main__":
-    months_map = {1: "JAN", 2: "FEB", 3: "MAR", 4: "APR", 5: "MAY", 6: "JUN", 7: "JUL", 8: "AUG", 9: "SEP", 10: "OCT", 11: "NOV", 12: "DEC"}
-    time_struct = time.gmtime()
-    m_tag = months_map.get(time_struct.tm_mon, "JUL")
-    y_val = time_struct.tm_year
-    
-    if len(sys.argv) > 2:
-        if str(sys.argv[1]).strip().upper() != "AUTO": m_tag = str(sys.argv[1]).strip().upper()
-        if str(sys.argv[2]).strip() != "AUTO": y_val = str(sys.argv[2]).strip()
-        
-    report = fetch_bandcamp_rss_machine()
-    send_to_admin(report, m_tag, y_val)
+    report = fetch_bandcamp_live_radar()
+    send_to_admin(report)
     
