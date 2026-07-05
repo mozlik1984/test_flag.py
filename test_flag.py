@@ -154,7 +154,7 @@ def fetch_musicbrainz_new_arrivals():
                 
                 if is_deleted: continue
                 flag_prefix = flag + " " if flag else ""
-                yt_link = "https" + C + S + S + "youtube.com" + S + "results" + Q + "search_query" + E + urllib.parse.quote(band + " " + album)
+                yt_link = "https" + C + S + S + "music.youtube.com" + S + "results" + Q + "search_query" + E + urllib.parse.quote(band + " " + album)
                 
                 block = f"{band} - {album} ({current_year})\n{flag_prefix}{detected_subgenre}\n{yt_link} {current_month_tag}"
                 packs.append(block)
