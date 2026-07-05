@@ -18,7 +18,10 @@ COUNTRY_TO_FLAG = {
     "Poland": "🇵🇱", "Greece": "🇬🇷", "Italy": "🇮🇹", "Switzerland": "🇨🇭",
     "Netherlands": "🇳🇱", "Belgium": "🇧🇪", "Portugal": "🇵🇹", "Spain": "🇪🇸",
     "Canada": "🇨🇦", "Australia": "🇦🇺", "Brazil": "🇧🇷", "Japan": "🇯🇵",
-    "Wales": "🏴󠁧󠁢󠁷󠁬󠁳󠁿"
+    "Wales": "🏴󠁧󠁢󠁷󠁬󠁳󠁿", "Czech Republic": "🇨🇿", "Denmark": "🇩🇰", 
+    "Indonesia": "🇮🇩", "Hungary": "🇭🇺", "Ireland": "🇮🇪", "Colombia": "🇨🇴",
+    "Chile": "🇨🇱", "Argentina": "🇦🇷", "Mexico": "🇲🇽", "New Zealand": "🇳🇿",
+    "Switzerland": "🇨🇭", "Slovakia": "🇸🇰", "Slovenia": "🇸🇮", "Estonia": "🇪🇪"
 }
 
 COUNTRY_MAP = {
@@ -26,7 +29,11 @@ COUNTRY_MAP = {
     "FR": "France", "US": "United States", "GB": "United Kingdom", 
     "UA": "Ukraine", "RU": "Russia", "AT": "Austria", "IS": "Iceland", 
     "PL": "Poland", "GR": "Greece", "IT": "Italy", "CH": "Switzerland", 
-    "NL": "Netherlands", "AU": "Australia", "CA": "Canada", "BR": "Brazil", "JP": "Japan"
+    "NL": "Netherlands", "AU": "Australia", "CA": "Canada", "BR": "Brazil", 
+    "JP": "Japan", "CZ": "Czech Republic", "DK": "Denmark", "ID": "Indonesia", 
+    "HU": "Hungary", "IE": "Ireland", "CO": "Colombia", "CL": "Chile", 
+    "AR": "Argentina", "MX": "Mexico", "NZ": "New Zealand", "SK": "Slovakia", 
+    "SI": "Slovenia", "EE": "Estonia"
 }
 
 def fetch_musicbrainz_new_arrivals():
@@ -52,7 +59,7 @@ def fetch_musicbrainz_new_arrivals():
 
     print(f"🛰️ Поиск релизов за цель: {current_month_tag} {current_year}")
     
-    query = f'type:album AND status:official AND date:{current_year} AND tag:"black metal"'
+    query = f'type:album AND status:official AND date:{current_year} AND (tag:"black metal" OR tag:"dsbm" OR tag:"depressive black metal" OR tag:"post-black metal")'
     url = P + "musicbrainz.org" + S + "ws" + S + "2" + S + "release" + "?query=" + urllib.parse.quote(query) + "&inc=tags+artist-credits&fmt=json&limit=100"
     headers = {'User-Agent': 'BlackMetalHubBot/17.0 ( mailto:Plokhomentov@example.com )'}
     
@@ -190,4 +197,3 @@ if __name__ == "__main__":
     
     final_report = fetch_musicbrainz_new_arrivals()
     send_to_admin(final_report, m_tag, y_val)
-    
