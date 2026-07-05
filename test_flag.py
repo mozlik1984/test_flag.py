@@ -21,7 +21,7 @@ COUNTRY_TO_FLAG = {
     "Wales": "🏴󠁧󠁢󠁷󠁬󠁳󠁿", "Czech Republic": "🇨🇿", "Denmark": "🇩🇰", 
     "Indonesia": "🇮🇩", "Hungary": "🇭🇺", "Ireland": "🇮🇪", "Colombia": "🇨🇴",
     "Chile": "🇨🇱", "Argentina": "🇦🇷", "Mexico": "🇲🇽", "New Zealand": "🇳🇿",
-    "Switzerland": "🇨🇭", "Slovakia": "🇸🇰", "Slovenia": "🇸🇮", "Estonia": "🇪🇪"
+    "Slovakia": "🇸🇰", "Slovenia": "🇸🇮", "Estonia": "🇪🇪"
 }
 
 COUNTRY_MAP = {
@@ -47,9 +47,9 @@ def fetch_musicbrainz_new_arrivals():
     user_corrections = ""
     
     if len(sys.argv) > 2:
-        input_month = str(sys.argv[1]).strip().upper()
-        input_year = str(sys.argv[2]).strip()
-        if len(sys.argv) > 3: user_corrections = str(sys.argv[3]).strip()
+        input_month = str(sys.argv).strip().upper()
+        input_year = str(sys.argv).strip()
+        if len(sys.argv) > 3: user_corrections = str(sys.argv).strip()
         
         if input_month != "AUTO" and input_month in months_num_map:
             current_month_tag = input_month
@@ -88,13 +88,13 @@ def fetch_musicbrainz_new_arrivals():
             if rel_date:
                 date_parts = rel_date.split("-")
                 if len(date_parts) > 1:
-                    if date_parts[1] != current_month_num:
+                    if date_parts != current_month_num:
                         continue
 
             artist_credit = rel.get("artist-credit", [])
             if not artist_credit: continue
             
-            first_artist = artist_credit[0] if isinstance(artist_credit, list) else artist_credit
+            first_artist = artist_credit if isinstance(artist_credit, list) else artist_credit
             artist_data = first_artist.get("artist", {})
             band = artist_data.get("name", "").strip()
             album = rel.get("title", "").strip()
@@ -133,7 +133,7 @@ def fetch_musicbrainz_new_arrivals():
                             if not country_code:
                                 area_data = art_data.get("area", {})
                                 iso_codes = area_data.get("iso-3166-1-codes", [])
-                                if iso_codes: country_code = iso_codes[0]
+                                if iso_codes: country_code = iso_codes
                     except:
                         pass
 
@@ -154,7 +154,8 @@ def fetch_musicbrainz_new_arrivals():
                 
                 if is_deleted: continue
                 flag_prefix = flag + " " if flag else ""
-                yt_link = "https" + C + S + S + "music.youtube.com" + S + "results" + Q + "search_query" + E + urllib.parse.quote(band + " " + album)
+                
+                yt_link = "https" + C + S + S + "music.youtube.com" + S + "search" + Q + "q" + E + urllib.parse.quote(band + " " + album)
                 
                 block = f"{band} - {album} ({current_year})\n{flag_prefix}{detected_subgenre}\n{yt_link} {current_month_tag}"
                 packs.append(block)
@@ -192,8 +193,8 @@ if __name__ == "__main__":
     m_tag = months_map.get(time_struct.tm_mon, "JUL")
     y_val = time_struct.tm_year
     
-    if len(sys.argv) > 2 and str(sys.argv[1]).upper() != "AUTO": m_tag = str(sys.argv[1]).upper()
-    if len(sys.argv) > 2 and str(sys.argv[2]) != "AUTO": y_val = str(sys.argv[2])
+    if len(sys.argv) > 2 and str(sys.argv).upper() != "AUTO": m_tag = str(sys.argv).upper()
+    if len(sys.argv) > 2 and str(sys.argv) != "AUTO": y_val = str(sys.argv)
     
     final_report = fetch_musicbrainz_new_arrivals()
     send_to_admin(final_report, m_tag, y_val)
