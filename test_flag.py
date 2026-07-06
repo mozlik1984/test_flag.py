@@ -46,7 +46,6 @@ def fetch_musicbrainz_new_arrivals():
     current_year = time_struct.tm_year
     user_corrections = ""
     
-    # Безопасное чтение аргументов командной строки
     if len(sys.argv) > 2:
         input_month = str(sys.argv[1]).strip().upper()
         input_year = str(sys.argv[2]).strip()
@@ -88,10 +87,11 @@ def fetch_musicbrainz_new_arrivals():
         tag_queries = " OR ".join([f'tag:"{g}"' for g in chunk])
         
         query = f'type:album AND status:official AND date:{current_year} AND ({tag_queries})'
-        url = P + "musicbrainz.org" + S + "ws" + S + "2" + S + "release" + "?query=" + urllib.parse.quote(query) + "&inc=tags+artist-credits&fmt=json&limit=100"
+        # ИСПРАВЛЕНО: Добавлен инкремент +areas для выгрузки стран
+        url = P + "musicbrainz.org" + S + "ws" + S + "2" + S + "release" + "?query=" + urllib.parse.quote(query) + "&inc=tags+artist-credits+areas&fmt=json&limit=100"
         headers = {'User-Agent': 'BlackMetalHubBot/17.0 ( mailto:Plokhomentov@example.com )'}
         
-        time.sleep(1) # Соблюдаем Rate Limit
+        time.sleep(1) 
         
         try:
             for attempt in range(3):
@@ -115,7 +115,6 @@ def fetch_musicbrainz_new_arrivals():
             print(f"⚠️ Ошибка при поиске группы {chunk}: {e}")
             continue
 
-    # Блок обработки результатов (вынесен из цикла запросов)
     packs = []
     seen_albums = set()
     
@@ -136,11 +135,17 @@ def fetch_musicbrainz_new_arrivals():
         band = artist_data.get("name", "").strip()
         album = rel.get("title", "").strip()
         
-        # Получаем код страны из профиля группы и переводим его в флаг
+        # ИСПРАВЛЕНО: Глубокое извлечение ISO-кода страны из структуры MB запросов
         country_code = artist_data.get("country", "")
+        if not country_code:
+            area_data = artist_data.get("area", {})
+            iso_codes = area_data.get("iso-3166-1-codes", [])
+            if iso_codes and isinstance(iso_codes, list):
+                country_code = iso_codes[0]
+                
         flag_emoji = ""
         if country_code:
-            country_name = COUNTRY_MAP.get(country_code.upper())
+            country_name = COUNTRY_MAP.get(str(country_code).upper())
             if country_name:
                 flag_emoji = COUNTRY_TO_FLAG.get(country_name, "")
         
@@ -163,19 +168,17 @@ def fetch_musicbrainz_new_arrivals():
                 
             genre_str = "/".join(subgenres)
             
-            # Подставляем флаг перед строкой жанров (если он нашелся)
+            # Подставляем флаг строго перед строкой жанров
             prefix = f"{flag_emoji} " if flag_emoji else ""
             
             release_info = f"{band} - {album} ({current_year})\n{prefix}{genre_str}\nhttps://youtube.com {current_month_tag}"
             packs.append(release_info)
 
-    # Отправка результатов в Telegram
     if not packs:
         output_text = f"🤷 За {current_month_tag} {current_year} релизов не найдено."
     else:
         output_text = f"\n---\n".join(packs)
 
-    # Разбивка длинных сообщений под лимиты Telegram
     max_len = 4000
     for chunk_text in [output_text[i:i + max_len] for i in range(0, len(output_text), max_len)]:
         send_url = f"{P}api.telegram.org{S}bot{BOT_TOKEN}{S}sendMessage"
@@ -189,3 +192,4 @@ def fetch_musicbrainz_new_arrivals():
 
 if __name__ == "__main__":
     fetch_musicbrainz_new_arrivals()
+    
