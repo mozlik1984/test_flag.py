@@ -59,7 +59,7 @@ def fetch_musicbrainz_new_arrivals():
 
     print(f"🛰️ Поиск релизов за цель: {current_month_tag} {current_year}")
     
-    query = f'type:album AND status:official AND date:{current_year} AND (tag:"black metal" OR tag:"dsbm" OR tag:"depressive black metal" OR tag:"post-black metal")'
+    query = f'type:album AND status:official AND date:{current_year} AND (tag:"black metal" OR tag:"dsbm" OR tag:"depressive black metal" OR tag:"post-black metal" OR tag:"atmospheric black metal" OR tag:"true black metal" OR tag:"raw black metal" OR tag:"orthodox black metal" OR tag:"melodic black metal" OR tag:"symphonic black metal" OR tag:"ambient black metal" OR tag:"blackgaze" OR tag:"avant-garde black metal" OR tag:"progressive black metal" OR tag:"dissonant black metal" OR tag:"psychedelic black metal" OR tag:"blackened death metal" OR tag:"war metal" OR tag:"bestial black metal" OR tag:"blackened thrash metal" OR tag:"black doom" OR tag:"blackened crust" OR tag:"blackened hardcore" OR tag:"blackened grindcore" OR tag:"pagan black metal" OR tag:"viking black metal" OR tag:"folk black metal" OR tag:"medieval black metal")'
     url = P + "musicbrainz.org" + S + "ws" + S + "2" + S + "release" + "?query=" + urllib.parse.quote(query) + "&inc=tags+artist-credits&fmt=json&limit=100"
     headers = {'User-Agent': 'BlackMetalHubBot/17.0 ( mailto:Plokhomentov@example.com )'}
     
@@ -109,90 +109,3 @@ def fetch_musicbrainz_new_arrivals():
                 tags_str = " ".join(tags_list)
                 
                 subgenres = []
-                if "hellenic" in tags_str or "greece" in tags_str: subgenres.append("Hellenic Black Metal")
-                if "atmospheric" in tags_str: subgenres.append("Atmospheric Black Metal")
-                if "depressive" in tags_str or "dsbm" in tags_str: subgenres.append("Depressive Black Metal")
-                if "post-black" in tags_str: subgenres.append("Post-Black Metal")
-                if "psychedelic" in tags_str: subgenres.append("Psychedelic Black Metal")
-                if "symphonic" in tags_str: subgenres.append("Symphonic Black Metal")
-                if "raw" in tags_str: subgenres.append("Raw Black Metal")
-                if "melodic" in tags_str: subgenres.append("Melodic Black Metal")
-                if "old school" in tags_str or "first wave" in tags_str: subgenres.append("Old School Black Metal")
-                
-                detected_subgenre = "/".join(subgenres) if subgenres else "Black Metal"
-                
-                country_code = ""
-                if artist_id:
-                    time.sleep(1.2)
-                    try:
-                        artist_url = P + "musicbrainz.org" + S + "ws" + S + "2" + S + "artist" + S + artist_id + "?fmt=json"
-                        req_art = urllib.request.Request(artist_url, headers=headers)
-                        with urllib.request.urlopen(req_art, timeout=5) as res_art:
-                            art_data = json.loads(res_art.read().decode('utf-8'))
-                            country_code = art_data.get("country", "")
-                            if not country_code:
-                                area_data = art_data.get("area", {})
-                                iso_codes = area_data.get("iso-3166-1-codes", [])
-                                if iso_codes: country_code = iso_codes[0]
-                    except:
-                        pass
-
-                if not country_code:
-                    country_code = rel.get("country", "")
-
-                country_name = COUNTRY_MAP.get(str(country_code).upper(), "")
-                flag = COUNTRY_TO_FLAG.get(country_name, "")
-                
-                is_deleted = False
-                if user_corrections and user_corrections != "AUTO":
-                    rules = user_corrections.split(",")
-                    for rule in rules:
-                        if "=" in rule:
-                            k, v = rule.split("=", 1)
-                            if k.strip().lower() in band.lower() and "delete" in v.lower(): 
-                                is_deleted = True
-                
-                if is_deleted: continue
-                flag_prefix = flag + " " if flag else ""
-                
-                block = f"{band} - {album} ({current_year})\n{flag_prefix}{detected_subgenre}\nhttps://youtube.com {current_month_tag}"
-                packs.append(block)
-                
-        if packs:
-            return "\n---\n".join(packs)
-            
-        return f"🌑 Проверенных полноформатных новинок за {current_month_tag} {current_year} пока не зафиксировано."
-    except Exception as e:
-        return "❌ Ошибка агрегатора: " + str(e)
-
-def send_to_admin(content_text, month_tag, year_val):
-    if not BOT_TOKEN:
-        print("Ошибка: Токен Telegram не найден.")
-        return
-    api_url = P + "api.telegram.org" + S + "bot" + BOT_TOKEN + S + "sendMessage"
-    formatted_msg = f"<b>⛓️ ЧИСТЫЙ АВТОНОМНЫЙ УЛОВ ЗА {month_tag} {year_val} ⛓️</b>\n\n<code>{content_text}</code>\n\n<i>👉 Ложные флаги отключены. Если страны нет в базе, альбом запишется чистым! Тапни для копирования.</i>"
-    
-    data = urllib.parse.urlencode({
-        'chat_id': ADMIN_CHAT_ID, 
-        'text': formatted_msg, 
-        'parse_mode': 'HTML',
-        'link_preview_options': json.dumps({'is_disabled': True})
-    }).encode('utf-8')
-    
-    req = urllib.request.Request(api_url, data=data)
-    try:
-        urllib.request.urlopen(req)
-    except Exception as e:
-        print("Ошибка отправки в Telegram:", e)
-
-if __name__ == "__main__":
-    months_map = {1: "JAN", 2: "FEB", 3: "MAR", 4: "APR", 5: "MAY", 6: "JUN", 7: "JUL", 8: "AUG", 9: "SEP", 10: "OCT", 11: "NOV", 12: "DEC"}
-    time_struct = time.gmtime()
-    m_tag = months_map.get(time_struct.tm_mon, "JUL")
-    y_val = time_struct.tm_year
-    
-    if len(sys.argv) > 2 and str(sys.argv[1]).upper() != "AUTO": m_tag = str(sys.argv[1]).upper()
-    if len(sys.argv) > 2 and str(sys.argv[2]) != "AUTO": y_val = str(sys.argv[2])
-    
-    final_report = fetch_musicbrainz_new_arrivals()
-    send_to_admin(final_report, m_tag, y_val)
