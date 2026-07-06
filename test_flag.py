@@ -12,7 +12,7 @@ ADMIN_CHAT_ID = 5002053185
 S = chr(47); C = chr(58)
 P = "https" + C + S + S
 
-# Эмодзи флагов для стран
+# Расширенный список эмодзи флагов (80 стран)
 COUNTRY_TO_FLAG = {
     "Norway": "🇳🇴", "Sweden": "🇸🇪", "Finland": "🇫🇮", "Germany": "🇩🇪",
     "France": "🇫🇷", "United States": "🇺🇸", "United Kingdom": "🇬🇧",
@@ -23,10 +23,23 @@ COUNTRY_TO_FLAG = {
     "Wales": "🏴󠁧󠁢󠁷󠁬󠁳󠁿", "Czech Republic": "🇨🇿", "Denmark": "🇩🇰", 
     "Indonesia": "🇮🇩", "Hungary": "🇭🇺", "Ireland": "🇮🇪", "Colombia": "🇨🇴",
     "Chile": "🇨🇱", "Argentina": "🇦🇷", "Mexico": "🇲🇽", "New Zealand": "🇳🇿",
-    "Slovakia": "🇸🇰", "Slovenia": "🇸🇮", "Estonia": "🇪🇪"
+    "Slovakia": "🇸🇰", "Slovenia": "🇸🇮", "Estonia": "🇪🇪",
+    # Добавленные страны:
+    "Belarus": "🇧🇾", "Kazakhstan": "🇰🇿", "Armenia": "🇦🇲", "Georgia": "🇬🇪",
+    "Lithuania": "🇱🇹", "Latvia": "🇱🇻", "Romania": "🇷🇴", "Bulgaria": "🇧🇬",
+    "Serbia": "🇷🇸", "Croatia": "🇭🇷", "Bosnia and Herzegovina": "🇧🇦", "Montenegro": "🇲🇪",
+    "North Macedonia": "🇲🇰", "Albania": "🇦🇱", "Turkey": "🇹🇷", "Cyprus": "🇨🇾",
+    "China": "🇨🇳", "Taiwan": "🇹🇼", "South Korea": "🇰🇷", "India": "🇮🇳",
+    "Thailand": "🇹🇭", "Vietnam": "🇻🇳", "Malaysia": "🇲🇾", "Singapore": "🇸🇬",
+    "Israel": "🇮🇱", "Saudi Arabia": "🇸🇦", "United Arab Emirates": "🇦🇪", "Iran": "🇮🇷",
+    "South Africa": "🇿🇦", "Egypt": "🇪🇬", "Morocco": "🇲🇦", "Tunisia": "🇹🇳",
+    "Peru": "🇵🇪", "Ecuador": "🇪🇨", "Venezuela": "🇻🇪", "Bolivia": "🇧🇴",
+    "Uruguay": "🇺🇾", "Paraguay": "🇵🇾", "Costa Rica": "🇨🇷", "Panama": "🇵🇦",
+    "Guatemala": "🇬🇹", "Cuba": "🇨🇺", "Puerto Rico": "🇵🇷", "Greenland": "🇬🇱",
+    "Luxembourg": "🇱🇺", "Malta": "🇲🇹", "San Marino": "🇸🇲", "Andorra": "🇦🇩"
 }
 
-# Маппинг ISO кодов в полные названия
+# Расширенный маппинг ISO-кодов (80 стран)
 COUNTRY_MAP = {
     "NO": "Norway", "SE": "Sweden", "FI": "Finland", "DE": "Germany", 
     "FR": "France", "US": "United States", "GB": "United Kingdom", 
@@ -36,7 +49,20 @@ COUNTRY_MAP = {
     "JP": "Japan", "CZ": "Czech Republic", "DK": "Denmark", "ID": "Indonesia", 
     "HU": "Hungary", "IE": "Ireland", "CO": "Colombia", "CL": "Chile", 
     "AR": "Argentina", "MX": "Mexico", "NZ": "New Zealand", "SK": "Slovakia", 
-    "SI": "Slovenia", "EE": "Estonia"
+    "SI": "Slovenia", "EE": "Estonia",
+    # Добавленные ISO-коды:
+    "BY": "Belarus", "KZ": "Kazakhstan", "AM": "Armenia", "GE": "Georgia",
+    "LT": "Lithuania", "LV": "Latvia", "RO": "Romania", "BG": "Bulgaria",
+    "RS": "Serbia", "HR": "Croatia", "BA": "Bosnia and Herzegovina", "ME": "Montenegro",
+    "MK": "North Macedonia", "AL": "Albania", "TR": "Turkey", "CY": "Cyprus",
+    "CN": "China", "TW": "Taiwan", "KR": "South Korea", "IN": "India",
+    "TH": "Thailand", "VN": "Vietnam", "MY": "Malaysia", "SG": "Singapore",
+    "IL": "Israel", "SA": "Saudi Arabia", "AE": "United Arab Emirates", "IR": "Iran",
+    "ZA": "South Africa", "EG": "Egypt", "MA": "Morocco", "TN": "Tunisia",
+    "PE": "Peru", "EC": "Ecuador", "VE": "Venezuela", "BO": "Bolivia",
+    "UY": "Uruguay", "PY": "Paraguay", "CR": "Costa Rica", "PA": "Panama",
+    "GT": "Guatemala", "CU": "Cuba", "PR": "Puerto Rico", "GL": "Greenland",
+    "LU": "Luxembourg", "MT": "Malta", "SM": "San Marino", "AD": "Andorra"
 }
 
 # Кэш стран артистов, чтобы избежать капчи и бана
