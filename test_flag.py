@@ -59,7 +59,7 @@ def fetch_musicbrainz_new_arrivals():
 
     print(f"🛰️ Поиск релизов за цель: {current_month_tag} {current_year}")
     
-    query = f'type:album AND status:official AND date:{current_year} AND (tag:"black metal" OR tag:"dsbm" OR tag:"depressive black metal" OR tag:"post-black metal" OR tag:"atmospheric black metal" OR tag:"true black metal" OR tag:"raw black metal" OR tag:"orthodox black metal" OR tag:"melodic black metal" OR tag:"symphonic black metal" OR tag:"ambient black metal" OR tag:"blackgaze" OR tag:"avant-garde black metal" OR tag:"progressive black metal" OR tag:"dissonant black metal" OR tag:"psychedelic black metal" OR tag:"blackened death metal" OR tag:"war metal" OR tag:"bestial black metal" OR tag:"blackened thrash metal" OR tag:"black doom" OR tag:"blackened crust" OR tag:"blackened hardcore" OR tag:"blackened grindcore" OR tag:"pagan black metal" OR tag:"viking black metal" OR tag:"folk black metal" OR tag:"medieval black metal")'
+    query = f'type:album AND status:official AND date:{current_year} AND (tag:"black metal" OR tag:"*black metal*" OR tag:"blackened *" OR tag:"dsbm" OR tag:"blackgaze" OR tag:"war metal")'
     url = P + "musicbrainz.org" + S + "ws" + S + "2" + S + "release" + "?query=" + urllib.parse.quote(query) + "&inc=tags+artist-credits&fmt=json&limit=100"
     headers = {'User-Agent': 'BlackMetalHubBot/17.0 ( mailto:Plokhomentov@example.com )'}
     
