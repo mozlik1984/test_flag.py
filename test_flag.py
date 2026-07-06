@@ -18,7 +18,7 @@ COUNTRY_TO_FLAG = {
     "Poland": "🇵🇱", "Greece": "🇬🇷", "Italy": "🇮🇹", "Switzerland": "🇨🇭",
     "Netherlands": "🇳🇱", "Belgium": "🇧🇪", "Portugal": "🇵🇹", "Spain": "🇪🇸",
     "Canada": "🇨🇦", "Australia": "🇦🇺", "Brazil": "🇧🇷", "Japan": "🇯🇵",
-    "Wales": "🏴󠁧󠁢🇺󠁬󠁳󠁿", "Czech Republic": "🇨🇿", "Denmark": "🇩🇰", 
+    "Wales": "🏴🇺", "Czech Republic": "🇨🇿", "Denmark": "🇩🇰", 
     "Indonesia": "🇮🇩", "Hungary": "🇭🇺", "Ireland": "🇮🇪", "Colombia": "🇨🇴",
     "Chile": "🇨🇱", "Argentina": "🇦🇷", "Mexico": "🇲🇽", "New Zealand": "🇳🇿",
     "Slovakia": "🇸🇰", "Slovenia": "🇸🇮", "Estonia": "🇪🇪"
@@ -59,21 +59,29 @@ def fetch_musicbrainz_new_arrivals():
 
     print(f"🛰️ Поиск релизов за цель: {current_month_tag} {current_year}")
     
-    genres = [
-        "black metal", "dsbm", "depressive black metal", "post-black metal",
-        "atmospheric black metal", "true black metal", "raw black metal", "orthodox black metal",
-        "melodic black metal", "symphonic black metal", "ambient black metal", "blackgaze",
-        "avant-garde black metal", "progressive black metal", "dissonant black metal", "psychedelic black metal",
-        "blackened death metal", "war metal", "bestial black metal", "blackened thrash metal",
-        "black doom", "blackened crust", "blackened hardcore", "blackened grindcore",
-        "pagan black metal", "viking black metal", "folk black metal", "medieval black metal"
-    ]
+    # Полный список поджанров для сопоставления тегов (в правильном регистре для вывода)
+    genres_map = {
+        "black metal": "Black Metal", "dsbm": "Depressive Black Metal", 
+        "depressive black metal": "Depressive Black Metal", "post-black metal": "Post-Black Metal",
+        "atmospheric black metal": "Atmospheric Black Metal", "true black metal": "True Black Metal", 
+        "raw black metal": "Raw Black Metal", "orthodox black metal": "Orthodox Black Metal",
+        "melodic black metal": "Melodic Black Metal", "symphonic black metal": "Symphonic Black Metal", 
+        "ambient black metal": "Ambient Black Metal", "blackgaze": "Blackgaze",
+        "avant-garde black metal": "Avant-Garde Black Metal", "progressive black metal": "Progressive Black Metal", 
+        "dissonant black metal": "Dissonant Black Metal", "psychedelic black metal": "Psychedelic Black Metal",
+        "blackened death metal": "Blackened Death Metal", "war metal": "War Metal", 
+        "bestial black metal": "Bestial Black Metal", "blackened thrash metal": "Blackened Thrash Metal",
+        "black doom": "Black-Doom", "blackened crust": "Blackened Crust", 
+        "blackened hardcore": "Blackened Hardcore", "blackened grindcore": "Blackened Grindcore",
+        "pagan black metal": "Pagan Black Metal", "viking black metal": "Viking Black Metal", 
+        "folk black metal": "Folk Black Metal", "medieval black metal": "Medieval Black Metal"
+    }
     
+    genres = list(genres_map.keys())
     all_releases = []
     chunk_size = 4
-    import time
     
-    # Поочередно запрашиваем группы поджанров, чтобы не перегружать URL
+    # Поочередно запрашиваем группы поджанров
     for i in range(0, len(genres), chunk_size):
         chunk = genres[i:i + chunk_size]
         tag_queries = " OR ".join([f'tag:"{g}"' for g in chunk])
@@ -82,8 +90,7 @@ def fetch_musicbrainz_new_arrivals():
         url = P + "musicbrainz.org" + S + "ws" + S + "2" + S + "release" + "?query=" + urllib.parse.quote(query) + "&inc=tags+artist-credits&fmt=json&limit=100"
         headers = {'User-Agent': 'BlackMetalHubBot/17.0 ( mailto:Plokhomentov@example.com )'}
         
-        # Обязательная пауза 1 секунда для соблюдения лимитов MusicBrainz API
-        time.sleep(1)
+        time.sleep(1) # Соблюдаем Rate Limit
         
         try:
             for attempt in range(3):
@@ -106,7 +113,6 @@ def fetch_musicbrainz_new_arrivals():
             print(f"⚠️ Ошибка при поиске группы {chunk}: {e}")
             continue
 
-    # Дальнейшая обработка всех собранных релизов
     packs = []
     seen_albums = set()
     
@@ -115,6 +121,7 @@ def fetch_musicbrainz_new_arrivals():
         if rel_date:
             date_parts = rel_date.split("-")
             if len(date_parts) > 1:
+                # ИСПРАВЛЕНО: Сравниваем конкретно элемент месяца, а не весь массив
                 if date_parts[1] != current_month_num:
                     continue
 
@@ -133,6 +140,44 @@ def fetch_musicbrainz_new_arrivals():
             seen_albums.add(release_key)
             
             tags_list = [t.get("name", "").lower() for t in rel.get("tags", [])]
-            tags_str = " ".join(tags_list)
             
+            # АВТОМАТИЧЕСКИЙ СБОР ПОДЖАНРОВ: Ищем совпадения в тегах релиза
             subgenres = []
+            for g_tag, g_name in genres_map.items():
+                if g_tag in tags_list:
+                    if g_name not in subgenres:
+                        subgenres.append(g_name)
+            
+            # Если специфичных тегов нет, но это блэк, ставим базовый
+            if not subgenres:
+                subgenres = ["Black Metal"]
+                
+            # Объединяем найденные поджанры через слэш
+            genre_str = "/".join(subgenres)
+            
+            # Собираем строку релиза для отправки
+            # (Примечание: Ссылку на youtube здесь ставим как заглушку, ваш второй бот её переделает)
+            release_info = f"{band} - {album} ({current_year})\n{genre_str}\nhttps://youtube.com {current_month_tag}"
+            packs.append(release_info)
+
+    # Отправка результатов в Telegram
+    if not packs:
+        output_text = f"🤷 За {current_month_tag} {current_year} релизов не найдено."
+    else:
+        output_text = f"\n---\n".join(packs)
+
+    # Разбиваем сообщение, если оно длиннее 4096 символов (лимит Telegram)
+    max_len = 4000
+    for chunk_text in [output_text[i:i + max_len] for i in range(0, len(output_text), max_len)]:
+        send_url = f"{P}api.telegram.org{S}bot{BOT_TOKEN}{S}sendMessage"
+        payload = json.dumps({"chat_id": ADMIN_CHAT_ID, "text": chunk_text}).encode('utf-8')
+        req = urllib.request.Request(send_url, data=payload, headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req) as resp:
+                pass
+        except Exception as e:
+            print(f"❌ Ошибка отправки в Telegram: {e}")
+
+if __name__ == "__main__":
+    fetch_musicbrainz_new_arrivals()
+    
