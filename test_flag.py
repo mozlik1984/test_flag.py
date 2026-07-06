@@ -165,12 +165,23 @@ def fetch_musicbrainz_new_arrivals():
                 if not subgenres:
                     subgenres.append("Black Metal")
                 
-                # Ниже идет продолжение вашей логики обработки альбома...
-                # (Формирование списка packs, вывод в консоль или отправка в Telegram)
-                print(f"🎵 {band} - {album} | Стили: {', '.join(subgenres)}")
+    # Отправка результатов в Telegram
+    if not packs:
+        output_text = f"🤷 За {current_month_tag} {current_year} релизов не найдено."
+    else:
+        output_text = f"\n---\n".join(packs)
 
-    except Exception as e:
-        print(f"❌ Произошла ошибка во время парсинга: {e}")
+    # Разбиваем сообщение, если оно длиннее 4096 символов (лимит Telegram)
+    max_len = 4000
+    for chunk_text in [output_text[i:i + max_len] for i in range(0, len(output_text), max_len)]:
+        send_url = f"{P}api.telegram.org{S}bot{BOT_TOKEN}{S}sendMessage"
+        payload = json.dumps({"chat_id": ADMIN_CHAT_ID, "text": chunk_text}).encode('utf-8')
+        req = urllib.request.Request(send_url, data=payload, headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req) as resp:
+                pass
+        except Exception as e:
+            print(f"❌ Ошибка отправки в Telegram: {e}")
 
 if __name__ == "__main__":
     fetch_musicbrainz_new_arrivals()
