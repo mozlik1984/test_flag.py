@@ -59,53 +59,80 @@ def fetch_musicbrainz_new_arrivals():
 
     print(f"🛰️ Поиск релизов за цель: {current_month_tag} {current_year}")
     
-    query = f'type:album AND status:official AND date:{current_year} AND (tag:"black metal" OR tag:"*black metal*" OR tag:"blackened *" OR tag:"dsbm" OR tag:"blackgaze" OR tag:"war metal")'
-    url = P + "musicbrainz.org" + S + "ws" + S + "2" + S + "release" + "?query=" + urllib.parse.quote(query) + "&inc=tags+artist-credits&fmt=json&limit=100"
-    headers = {'User-Agent': 'BlackMetalHubBot/17.0 ( mailto:Plokhomentov@example.com )'}
+    genres = [
+        "black metal", "dsbm", "depressive black metal", "post-black metal",
+        "atmospheric black metal", "true black metal", "raw black metal", "orthodox black metal",
+        "melodic black metal", "symphonic black metal", "ambient black metal", "blackgaze",
+        "avant-garde black metal", "progressive black metal", "dissonant black metal", "psychedelic black metal",
+        "blackened death metal", "war metal", "bestial black metal", "blackened thrash metal",
+        "black doom", "blackened crust", "blackened hardcore", "blackened grindcore",
+        "pagan black metal", "viking black metal", "folk black metal", "medieval black metal"
+    ]
     
-    try:
-        for attempt in range(3):
-            try:
-                req = urllib.request.Request(url, headers=headers)
-                with urllib.request.urlopen(req, timeout=15) as response:
-                    if response.status == 200:
-                        data = json.loads(response.read().decode('utf-8'))
-                        break
-            except urllib.error.HTTPError as he:
-                if he.code == 503 and attempt < 2:
-                    time.sleep(3)
-                    continue
-                raise he
-        else:
-            return "❌ Сервер MusicBrainz перегружен (503). Попробуйте запустить позже."
-
-        releases = data.get("releases", [])
-        packs = []
-        seen_albums = set()
+    all_releases = []
+    chunk_size = 4
+    import time
+    
+    # Поочередно запрашиваем группы поджанров, чтобы не перегружать URL
+    for i in range(0, len(genres), chunk_size):
+        chunk = genres[i:i + chunk_size]
+        tag_queries = " OR ".join([f'tag:"{g}"' for g in chunk])
         
-        for rel in releases:
-            rel_date = rel.get("date", "")
-            if rel_date:
-                date_parts = rel_date.split("-")
-                if len(date_parts) > 1:
-                    if date_parts[1] != current_month_num:
+        query = f'type:album AND status:official AND date:{current_year} AND ({tag_queries})'
+        url = P + "musicbrainz.org" + S + "ws" + S + "2" + S + "release" + "?query=" + urllib.parse.quote(query) + "&inc=tags+artist-credits&fmt=json&limit=100"
+        headers = {'User-Agent': 'BlackMetalHubBot/17.0 ( mailto:Plokhomentov@example.com )'}
+        
+        # Обязательная пауза 1 секунда для соблюдения лимитов MusicBrainz API
+        time.sleep(1)
+        
+        try:
+            for attempt in range(3):
+                try:
+                    req = urllib.request.Request(url, headers=headers)
+                    with urllib.request.urlopen(req, timeout=15) as response:
+                        if response.status == 200:
+                            chunk_data = json.loads(response.read().decode('utf-8'))
+                            if "releases" in chunk_data:
+                                all_releases.extend(chunk_data["releases"])
+                            break
+                except urllib.error.HTTPError as he:
+                    if he.code == 503 and attempt < 2:
+                        time.sleep(3)
                         continue
+                    raise he
+            else:
+                return "❌ Сервер MusicBrainz перегружен (503). Попробуйте запустить позже."
+        except Exception as e:
+            print(f"⚠️ Ошибка при поиске группы {chunk}: {e}")
+            continue
 
-            artist_credit = rel.get("artist-credit", [])
-            if not artist_credit: continue
+    # Дальнейшая обработка всех собранных релизов
+    packs = []
+    seen_albums = set()
+    
+    for rel in all_releases:
+        rel_date = rel.get("date", "")
+        if rel_date:
+            date_parts = rel_date.split("-")
+            if len(date_parts) > 1:
+                if date_parts[1] != current_month_num:
+                    continue
+
+        artist_credit = rel.get("artist-credit", [])
+        if not artist_credit: continue
+        
+        first_artist = artist_credit[0] if isinstance(artist_credit, list) else artist_credit
+        artist_data = first_artist.get("artist", {})
+        band = artist_data.get("name", "").strip()
+        album = rel.get("title", "").strip()
+        artist_id = artist_data.get("id", "")
+        
+        if band and album:
+            release_key = band.lower() + " - " + album.lower()
+            if release_key in seen_albums: continue
+            seen_albums.add(release_key)
             
-            first_artist = artist_credit[0] if isinstance(artist_credit, list) else artist_credit
-            artist_data = first_artist.get("artist", {})
-            band = artist_data.get("name", "").strip()
-            album = rel.get("title", "").strip()
-            artist_id = artist_data.get("id", "")
+            tags_list = [t.get("name", "").lower() for t in rel.get("tags", [])]
+            tags_str = " ".join(tags_list)
             
-            if band and album:
-                release_key = band.lower() + " - " + album.lower()
-                if release_key in seen_albums: continue
-                seen_albums.add(release_key)
-                
-                tags_list = [t.get("name", "").lower() for t in rel.get("tags", [])]
-                tags_str = " ".join(tags_list)
-                
-                subgenres = []
+            subgenres = []
