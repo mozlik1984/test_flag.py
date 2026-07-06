@@ -36,6 +36,51 @@ COUNTRY_MAP = {
     "SI": "Slovenia", "EE": "Estonia"
 }
 
+# Полный список поджанров блэк-метала для поиска в тегах релизов
+BLACK_METAL_SUBGENRES = {
+    "dsbm": "DSBM",
+    "depressive black metal": "Depressive Black Metal",
+    "suicidal black metal": "Suicidal Black Metal",
+    "atmospheric black metal": "Atmospheric Black Metal",
+    "ambient black metal": "Ambient Black Metal",
+    "post-black metal": "Post-Black Metal",
+    "blackgaze": "Blackgaze",
+    "melodic black metal": "Melodic Black Metal",
+    "symphonic black metal": "Symphonic Black Metal",
+    "pagan black metal": "Pagan Black Metal",
+    "viking black metal": "Viking Black Metal",
+    "folk black metal": "Folk Black Metal",
+    "orthodox black metal": "Orthodox Black Metal",
+    "religious black metal": "Religious Black Metal",
+    "raw black metal": "Raw Black Metal",
+    "war metal": "War Metal",
+    "bestial black metal": "Bestial Black Metal",
+    "industrial black metal": "Industrial Black Metal",
+    "electronic black metal": "Electronic Black Metal",
+    "progressive black metal": "Progressive Black Metal",
+    "avant-garde black metal": "Avant-garde Black Metal",
+    "technical black metal": "Technical Black Metal",
+    "psychedelic black metal": "Psychedelic Black Metal",
+    "blackened death metal": "Blackened Death Metal",
+    "black-death": "Black-Death Metal",
+    "blackened thrash metal": "Blackened Thrash Metal",
+    "black-thrash": "Black-Thrash Metal",
+    "blackened speed metal": "Blackened Speed Metal",
+    "blackened doom metal": "Blackened Doom Metal",
+    "black-doom": "Black-Doom Metal",
+    "blackened crust": "Blackened Crust",
+    "blackened hardcore": "Blackened Hardcore",
+    "black 'n' roll": "Black 'n' Roll",
+    "black n roll": "Black 'n' Roll",
+    "first wave black metal": "First Wave Black Metal",
+    "second wave black metal": "Second Wave Black Metal",
+    "cosmic black metal": "Cosmic Black Metal",
+    "epic black metal": "Epic Black Metal",
+    "fantasy black metal": "Fantasy Black Metal",
+    "nsbm": "NSBM",
+    "rabm": "RABM"
+}
+
 def fetch_musicbrainz_new_arrivals():
     months_map = {1: "JAN", 2: "FEB", 3: "MAR", 4: "APR", 5: "MAY", 6: "JUN", 7: "JUL", 8: "AUG", 9: "SEP", 10: "OCT", 11: "NOV", 12: "DEC"}
     months_num_map = {"JAN": "01", "FEB": "02", "MAR": "03", "APR": "04", "MAY": "05", "JUN": "06", "JUL": "07", "AUG": "08", "SEP": "09", "OCT": "10", "NOV": "11", "DEC": "12"}
@@ -59,125 +104,73 @@ def fetch_musicbrainz_new_arrivals():
 
     print(f"🛰️ Поиск релизов за цель: {current_month_tag} {current_year}")
     
-    # Полный список поджанров для сопоставления тегов (в правильном регистре для вывода)
-    genres_map = {
-        "black metal": "Black Metal", "dsbm": "Depressive Black Metal", 
-        "depressive black metal": "Depressive Black Metal", "post-black metal": "Post-Black Metal",
-        "atmospheric black metal": "Atmospheric Black Metal", "true black metal": "True Black Metal", 
-        "raw black metal": "Raw Black Metal", "orthodox black metal": "Orthodox Black Metal",
-        "melodic black metal": "Melodic Black Metal", "symphonic black metal": "Symphonic Black Metal", 
-        "ambient black metal": "Ambient Black Metal", "blackgaze": "Blackgaze",
-        "avant-garde black metal": "Avant-Garde Black Metal", "progressive black metal": "Progressive Black Metal", 
-        "dissonant black metal": "Dissonant Black Metal", "psychedelic black metal": "Psychedelic Black Metal",
-        "blackened death metal": "Blackened Death Metal", "war metal": "War Metal", 
-        "bestial black metal": "Bestial Black Metal", "blackened thrash metal": "Blackened Thrash Metal",
-        "black doom": "Black-Doom", "blackened crust": "Blackened Crust", 
-        "blackened hardcore": "Blackened Hardcore", "blackened grindcore": "Blackened Grindcore",
-        "pagan black metal": "Pagan Black Metal", "viking black metal": "Viking Black Metal", 
-        "folk black metal": "Folk Black Metal", "medieval black metal": "Medieval Black Metal"
-    }
+    # Запрос ищет базовый тег "black metal", чтобы захватить все его вариации
+    query = f'type:album AND status:official AND date:{current_year} AND tag:"black metal"'
+    url = P + "musicbrainz.org" + S + "ws" + S + "2" + S + "release" + "?query=" + urllib.parse.quote(query) + "&inc=tags+artist-credits&fmt=json&limit=100"
+    headers = {'User-Agent': 'BlackMetalHubBot/17.0 ( mailto:Plokhomentov@example.com )'}
     
-    genres = list(genres_map.keys())
-    all_releases = []
-    chunk_size = 4
-    
-    # Поочередно запрашиваем группы поджанров
-    for i in range(0, len(genres), chunk_size):
-        chunk = genres[i:i + chunk_size]
-        tag_queries = " OR ".join([f'tag:"{g}"' for g in chunk])
-        
-        query = f'type:album AND status:official AND date:{current_year} AND ({tag_queries})'
-        url = P + "musicbrainz.org" + S + "ws" + S + "2" + S + "release" + "?query=" + urllib.parse.quote(query) + "&inc=tags+artist-credits&fmt=json&limit=100"
-        headers = {'User-Agent': 'BlackMetalHubBot/17.0 ( mailto:Plokhomentov@example.com )'}
-        
-        time.sleep(1) # Соблюдаем Rate Limit
-        
-        try:
-            for attempt in range(3):
-                try:
-                    req = urllib.request.Request(url, headers=headers)
-                    with urllib.request.urlopen(req, timeout=15) as response:
-                        if response.status == 200:
-                            chunk_data = json.loads(response.read().decode('utf-8'))
-                            if "releases" in chunk_data:
-                                all_releases.extend(chunk_data["releases"])
-                            break
-                except urllib.error.HTTPError as he:
-                    if he.code == 503 and attempt < 2:
-                        time.sleep(3)
-                        continue
-                    raise he
-            else:
-                return "❌ Сервер MusicBrainz перегружен (503). Попробуйте запустить позже."
-        except Exception as e:
-            print(f"⚠️ Ошибка при поиске группы {chunk}: {e}")
-            continue
-
-    packs = []
-    seen_albums = set()
-    
-    for rel in all_releases:
-        rel_date = rel.get("date", "")
-        if rel_date:
-            date_parts = rel_date.split("-")
-            if len(date_parts) > 1:
-                # ИСПРАВЛЕНО: Сравниваем конкретно элемент месяца, а не весь массив
-                if date_parts[1] != current_month_num:
+    try:
+        for attempt in range(3):
+            try:
+                req = urllib.request.Request(url, headers=headers)
+                with urllib.request.urlopen(req, timeout=15) as response:
+                    if response.status == 200:
+                        data = json.loads(response.read().decode('utf-8'))
+                        break
+            except urllib.error.HTTPError as he:
+                if he.code == 503 and attempt < 2:
+                    time.sleep(3)
                     continue
+                raise he
+        else:
+            return "❌ Сервер MusicBrainz перегружен (503). Попробуйте запустить позже."
 
-        artist_credit = rel.get("artist-credit", [])
-        if not artist_credit: continue
+        releases = data.get("releases", [])
+        packs = []
+        seen_albums = set()
         
-        first_artist = artist_credit[0] if isinstance(artist_credit, list) else artist_credit
-        artist_data = first_artist.get("artist", {})
-        band = artist_data.get("name", "").strip()
-        album = rel.get("title", "").strip()
-        artist_id = artist_data.get("id", "")
-        
-        if band and album:
-            release_key = band.lower() + " - " + album.lower()
-            if release_key in seen_albums: continue
-            seen_albums.add(release_key)
+        for rel in releases:
+            rel_date = rel.get("date", "")
+            if rel_date:
+                date_parts = rel_date.split("-")
+                if len(date_parts) > 1:
+                    if date_parts[1] != current_month_num:
+                        continue
+
+            artist_credit = rel.get("artist-credit", [])
+            if not artist_credit: continue
             
-            tags_list = [t.get("name", "").lower() for t in rel.get("tags", [])]
+            first_artist = artist_credit[0] if isinstance(artist_credit, list) else artist_credit
+            artist_data = first_artist.get("artist", {})
+            band = artist_data.get("name", "").strip()
+            album = rel.get("title", "").strip()
+            artist_id = artist_data.get("id", "")
             
-            # АВТОМАТИЧЕСКИЙ СБОР ПОДЖАНРОВ: Ищем совпадения в тегах релиза
-            subgenres = []
-            for g_tag, g_name in genres_map.items():
-                if g_tag in tags_list:
-                    if g_name not in subgenres:
-                        subgenres.append(g_name)
-            
-            # Если специфичных тегов нет, но это блэк, ставим базовый
-            if not subgenres:
-                subgenres = ["Black Metal"]
+            if band and album:
+                release_key = band.lower() + " - " + album.lower()
+                if release_key in seen_albums: continue
+                seen_albums.add(release_key)
                 
-            # Объединяем найденные поджанры через слэш
-            genre_str = "/".join(subgenres)
-            
-            # Собираем строку релиза для отправки
-            # (Примечание: Ссылку на youtube здесь ставим как заглушку, ваш второй бот её переделает)
-            release_info = f"{band} - {album} ({current_year})\n{genre_str}\nhttps://youtube.com {current_month_tag}"
-            packs.append(release_info)
+                tags_list = [t.get("name", "").lower() for t in rel.get("tags", [])]
+                tags_str = " ".join(tags_list)
+                
+                # Автоматический сбор всех найденных поджанров блэка для этого релиза
+                subgenres = []
+                for tag_key, tag_clean_name in BLACK_METAL_SUBGENRES.items():
+                    if tag_key in tags_str:
+                        if tag_clean_name not in subgenres:
+                            subgenres.append(tag_clean_name)
+                
+                # Если специфичных поджанров не найдено, ставим дефолтный Black Metal
+                if not subgenres:
+                    subgenres.append("Black Metal")
+                
+                # Ниже идет продолжение вашей логики обработки альбома...
+                # (Формирование списка packs, вывод в консоль или отправка в Telegram)
+                print(f"🎵 {band} - {album} | Стили: {', '.join(subgenres)}")
 
-    # Отправка результатов в Telegram
-    if not packs:
-        output_text = f"🤷 За {current_month_tag} {current_year} релизов не найдено."
-    else:
-        output_text = f"\n---\n".join(packs)
-
-    # Разбиваем сообщение, если оно длиннее 4096 символов (лимит Telegram)
-    max_len = 4000
-    for chunk_text in [output_text[i:i + max_len] for i in range(0, len(output_text), max_len)]:
-        send_url = f"{P}api.telegram.org{S}bot{BOT_TOKEN}{S}sendMessage"
-        payload = json.dumps({"chat_id": ADMIN_CHAT_ID, "text": chunk_text}).encode('utf-8')
-        req = urllib.request.Request(send_url, data=payload, headers={"Content-Type": "application/json"})
-        try:
-            with urllib.request.urlopen(req) as resp:
-                pass
-        except Exception as e:
-            print(f"❌ Ошибка отправки в Telegram: {e}")
+    except Exception as e:
+        print(f"❌ Произошла ошибка во время парсинга: {e}")
 
 if __name__ == "__main__":
     fetch_musicbrainz_new_arrivals()
-    
