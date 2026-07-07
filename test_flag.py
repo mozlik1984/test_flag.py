@@ -146,7 +146,13 @@ def fetch_musicbrainz_new_arrivals():
         "bestial black metal": "Bestial Black Metal", "bestial black": "Bestial Black Metal",
         "bestial metal": "Bestial Black Metal", "industrial black metal": "Industrial Black Metal",
         "industrial black": "Industrial Black Metal", "cyber black metal": "Industrial Black Metal",
-        "cyber black": "Industrial Black Metal"
+        "cyber black": "Industrial Black Metal",
+        "first wave of black metal": "First Wave Black Metal",
+        "first wave black metal": "First Wave Black Metal",
+        "proto-black metal": "Proto-Black Metal",
+        "proto-black": "Proto-Black Metal",
+        "speed metal": "Speed/Thrash Metal",
+        "thrash metal": "Thrash Metal"
     }
     
     genres = list(genres_map.keys())
