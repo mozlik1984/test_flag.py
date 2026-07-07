@@ -118,21 +118,57 @@ def fetch_musicbrainz_new_arrivals():
 
     print(f"🛰️ Поиск за: {current_month_tag} {current_year}")
     
+        # Полный список поджанров для сопоставления тегов (включая редкие и альтернативные теги)
     genres_map = {
-        "black metal": "Black Metal", "dsbm": "Depressive Black Metal", 
-        "depressive black metal": "Depressive Black Metal", "post-black metal": "Post-Black Metal",
-        "atmospheric black metal": "Atmospheric Black Metal", "true black metal": "True Black Metal", 
-        "raw black metal": "Raw Black Metal", "orthodox black metal": "Orthodox Black Metal",
-        "melodic black metal": "Melodic Black Metal", "symphonic black metal": "Symphonic Black Metal", 
-        "ambient black metal": "Ambient Black Metal", "blackgaze": "Blackgaze",
-        "avant-garde black metal": "Avant-Garde Black Metal", "progressive black metal": "Progressive Black Metal", 
-        "dissonant black metal": "Dissonant Black Metal", "psychedelic black metal": "Psychedelic Black Metal",
-        "blackened death metal": "Blackened Death Metal", "war metal": "War Metal", 
-        "bestial black metal": "Bestial Black Metal", "blackened thrash metal": "Blackened Thrash Metal",
-        "black doom": "Black-Doom", "blackened crust": "Blackened Crust", 
-        "blackened hardcore": "Blackened Hardcore", "blackened grindcore": "Blackened Grindcore",
-        "pagan black metal": "Pagan Black Metal", "viking black metal": "Viking Black Metal", 
-        "folk black metal": "Folk Black Metal", "medieval black metal": "Medieval Black Metal"
+        # Базовые и классические жанры
+        "black metal": "Black Metal", 
+        "true black metal": "True Black Metal", 
+        "raw black metal": "Raw Black Metal", 
+        "orthodox black metal": "Orthodox Black Metal",
+        "melodic black metal": "Melodic Black Metal", 
+        "symphonic black metal": "Symphonic Black Metal", 
+        "ambient black metal": "Ambient Black Metal", 
+        "blackgaze": "Blackgaze",
+        
+        # Депрессивные и атмосферные направления
+        "dsbm": "Depressive Black Metal", 
+        "depressive black metal": "Depressive Black Metal", 
+        "post-black metal": "Post-Black Metal",
+        "atmospheric black metal": "Atmospheric Black Metal", 
+        
+        # Прогрессив и авангард
+        "avant-garde black metal": "Avant-Garde Black Metal", 
+        "progressive black metal": "Progressive Black Metal", 
+        "dissonant black metal": "Dissonant Black Metal", 
+        "psychedelic black metal": "Psychedelic Black Metal",
+        
+        # Смешения с дэт-метал и кроссоверы
+        "blackened death metal": "Blackened Death Metal", 
+        "blackened death": "Blackened Death Metal",
+        "black doom": "Black-Doom", 
+        "black-doom": "Black-Doom",
+        "blackened crust": "Blackened Crust", 
+        "blackened hardcore": "Blackened Hardcore", 
+        "blackened grindcore": "Blackened Grindcore",
+        "blackened thrash metal": "Blackened Thrash Metal",
+        
+        # Фолк и язычество
+        "pagan black metal": "Pagan Black Metal", 
+        "viking black metal": "Viking Black Metal", 
+        "folk black metal": "Folk Black Metal", 
+        "medieval black metal": "Medieval Black Metal",
+        
+        # РАСШИРЕНИЕ ДЛЯ WAR / BESTIAL METAL (чтобы ловить редкие релизы)
+        "war metal": "War Metal", 
+        "bestial black metal": "Bestial Black Metal", 
+        "bestial black": "Bestial Black Metal",
+        "bestial metal": "Bestial Black Metal",
+        
+        # РАСШИРЕНИЕ ДЛЯ INDUSTRIAL / CYBER BLACK (чтобы ловить электронику)
+        "industrial black metal": "Industrial Black Metal",
+        "industrial black": "Industrial Black Metal",
+        "cyber black metal": "Industrial Black Metal",
+        "cyber black": "Industrial Black Metal"
     }
     
     genres = list(genres_map.keys())
