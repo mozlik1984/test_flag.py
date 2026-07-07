@@ -158,8 +158,8 @@ def fetch_musicbrainz_new_arrivals():
     for i in range(0, len(genres), chunk_size):
         chunk = genres[i:i + chunk_size]
         tag_queries = " OR ".join([f'tag:"{g}"' for g in chunk])
-                # ИСПРАВЛЕНО: ищем любой вариант даты, начинающийся на нужный год
-        query = f'type:album AND status:official AND date:{current_year}* AND ({tag_queries})'
+                        # ИСПРАВЛЕНО: Правильный синтаксис Lucene для поиска за весь год целиком
+        query = f'type:album AND status:official AND date:[{current_year}-01-01 TO {current_year}-12-31] AND ({tag_queries})'
         
         offset = 0
         limit = 100
