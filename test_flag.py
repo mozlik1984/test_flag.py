@@ -102,25 +102,30 @@ def fetch_musicbrainz_new_arrivals():
     current_month_num = None
     current_year = time_struct.tm_year
     
-    # Умный разбор аргументов командной строки
-    if len(sys.argv) > 1:
-        arg1 = str(sys.argv[1]).strip().upper()
+    # Умный разбор аргументов, заточенный под GitHub Actions (AUTO / конкретные значения)
+    if len(sys.argv) > 2:
+        input_month = str(sys.argv[1]).strip().upper()
+        input_year = str(sys.argv[2]).strip().upper()
         
-        # Если передан только год (например: python script.py 1993)
-        if arg1.isdigit() and len(arg1) == 4:
-            current_year = int(arg1)
-            print(f"🛰️ Запущен архивный режим. Поиск за ВЕСЬ {current_year} ГОД")
-        else:
-            # Если передано два аргумента (например: python script.py MAR 2021)
-            current_month_tag = arg1
-            if current_month_tag in months_num_map:
-                current_month_num = months_num_map[current_month_tag]
+        # 1. Разбираемся с годом
+        if input_year != "AUTO" and input_year.isdigit():
+            current_year = int(input_year)
             
-            if len(sys.argv) > 2:
-                arg2 = str(sys.argv[2]).strip()
-                if arg2.isdigit():
-                    current_year = int(arg2)
-            print(f"🛰️ Поиск за конкретный период: {current_month_tag} {current_year}")
+        # 2. Разбираемся с месяцем
+        if input_month != "AUTO" and input_month in months_num_map:
+            current_month_tag = input_month
+            current_month_num = months_num_map[input_month]
+        else:
+            # Если месяц оставлен как AUTO, сбрасываем его в None, 
+            # чтобы включился архивный режим поиска за ВЕСЬ ГОД
+            current_month_tag = None
+            current_month_num = None
+
+    # Выводим инфо для логов GitHub
+    if current_month_tag:
+        print(f"🛰️ Поиск за конкретный период: {current_month_tag} {current_year}")
+    else:
+        print(f"🛰️ Запущен архивный режим. Поиск за ВЕСЬ {current_year} ГОД")
 
     # Сетка поджанров, усиленная War и Industrial направлениями
     genres_map = {
