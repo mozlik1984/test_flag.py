@@ -127,7 +127,7 @@ def fetch_musicbrainz_new_arrivals():
     else:
         print(f"🛰️ Запущен архивный режим. Поиск за ВЕСЬ {current_year} ГОД")
 
-    # Сетка поджанров, усиленная War и Industrial направлениями
+        # Сетка поджанров, усиленная Первой Волной и блэк-кроссоверами
     genres_map = {
         "black metal": "Black Metal", "true black metal": "True Black Metal", 
         "raw black metal": "Raw Black Metal", "orthodox black metal": "Orthodox Black Metal",
@@ -147,12 +147,17 @@ def fetch_musicbrainz_new_arrivals():
         "bestial metal": "Bestial Black Metal", "industrial black metal": "Industrial Black Metal",
         "industrial black": "Industrial Black Metal", "cyber black metal": "Industrial Black Metal",
         "cyber black": "Industrial Black Metal",
+        
+        # ДОБАВЛЕНО: Первая волна и специфические блэк-кроссоверы (без чистого трэша)
         "first wave of black metal": "First Wave Black Metal",
         "first wave black metal": "First Wave Black Metal",
         "proto-black metal": "Proto-Black Metal",
         "proto-black": "Proto-Black Metal",
-        "speed metal": "Speed/Thrash Metal",
-        "thrash metal": "Thrash Metal"
+        "blackened thrash": "Blackened Thrash Metal",
+        "black thrash": "Blackened Thrash Metal",
+        "black thrash metal": "Blackened Thrash Metal",
+        "black speed metal": "Black/Speed Metal",
+        "blackened speed metal": "Black/Speed Metal"
     }
     
     genres = list(genres_map.keys())
