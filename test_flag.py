@@ -158,7 +158,8 @@ def fetch_musicbrainz_new_arrivals():
     for i in range(0, len(genres), chunk_size):
         chunk = genres[i:i + chunk_size]
         tag_queries = " OR ".join([f'tag:"{g}"' for g in chunk])
-        query = f'type:album AND status:official AND date:{current_year} AND ({tag_queries})'
+                # ИСПРАВЛЕНО: ищем любой вариант даты, начинающийся на нужный год
+        query = f'type:album AND status:official AND date:{current_year}* AND ({tag_queries})'
         
         offset = 0
         limit = 100
