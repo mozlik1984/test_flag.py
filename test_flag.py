@@ -102,7 +102,7 @@ def fetch_musicbrainz_new_arrivals():
     current_month_num = None
     current_year = time_struct.tm_year
     
-    # Умный разбор аргументов, заточенный под GitHub Actions (AUTO / конкретные значения)
+     # Умный разбор аргументов, заточенный под GitHub Actions и кнопки месяцев
     if len(sys.argv) > 2:
         input_month = str(sys.argv[1]).strip().upper()
         input_year = str(sys.argv[2]).strip().upper()
@@ -115,9 +115,14 @@ def fetch_musicbrainz_new_arrivals():
         if input_month != "AUTO" and input_month in months_num_map:
             current_month_tag = input_month
             current_month_num = months_num_map[input_month]
+        elif input_month == "AUTO" and input_year == "AUTO":
+            # Если оба поля AUTO (ежемесячный запуск бота по расписанию):
+            # возвращаем текущий месяц и год, чтобы на конце были JAN, FEB, MAR...
+            current_month_tag = months_map.get(time_struct.tm_mon, "JUL")
+            current_month_num = str(time_struct.tm_mon).zfill(2)
         else:
-            # Если месяц оставлен как AUTO, сбрасываем его в None, 
-            # чтобы включился архивный режим поиска за ВЕСЬ ГОД
+            # Если месяц AUTO, а год конкретный (архивный режим):
+            # отключаем фильтр месяцев для глубокого копания
             current_month_tag = None
             current_month_num = None
 
