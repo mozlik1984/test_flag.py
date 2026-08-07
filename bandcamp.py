@@ -13,7 +13,7 @@ def fetch_bandcamp_rss():
     print("🔥 Сбор свежего блэка через официальный RSS-шлюз Bandcamp...")
     
     # Открытая и стабильная лента Bandcamp по тегу black-metal
-    url = P + "bandcamp.com" + S + "tag" + S + "black-metal" + S + "feed.xml"
+    url = P + "www.bandcamp.com" + S + "tag" + S + "black-metal" + S + "feed.xml"
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
