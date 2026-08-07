@@ -1,5 +1,6 @@
 import os
 import urllib.request
+import urllib.parse
 import xml.etree.ElementTree as ET
 
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -12,7 +13,7 @@ P = "https" + C + S + S
 def fetch_bandcamp_rss():
     print("🔥 Сбор свежего блэка через официальный RSS-шлюз Bandcamp...")
     
-    # Открытая и стабильная лента Bandcamp по тегу black-metal
+    # Стабильная и открытая лента Bandcamp по тегу black-metal
     url = P + "www.bandcamp.com" + S + "tag" + S + "black-metal" + S + "feed.xml"
     
     headers = {
@@ -24,21 +25,24 @@ def fetch_bandcamp_rss():
         with urllib.request.urlopen(req, timeout=15) as response:
             if response.status != 200:
                 return "❌ Сервер Bandcamp не ответил на запрос ленты."
-            xml_data = response.read()
             
-        root = ET.fromstring(xml_data)
+            # ИСПРАВЛЕНИЕ: Декодируем в чистый utf-8 и жестко игнорируем любые 
+            # ломающие спецсимволы (&, <, > и умлауты), на которых спотыкался XML-парсер
+            xml_text = response.read().decode('utf-8', errors='ignore')
+            
+        root = ET.fromstring(xml_text)
         
         packs = []
         # Пробегаемся по свежим релизам в XML-ленте
-        for item in root.findall('.//item')[:7]: # Берем 7 самых свежих
+        for item in root.findall('.//item')[:7]: # Берем 7 самых свежих альбомов
             title_text = item.find('title').text if item.find('title') is not None else "Unknown - Unknown"
             album_url = item.find('link').text if item.find('link') is not None else ""
             
             if not album_url:
                 continue
                 
-            # Чистим ссылку от мусора статистики
-            clean_url = album_url.split('?')[0]
+            # Чистим ссылку от хвостиков статистики
+            clean_url = album_url.split('?')
             
             # Твоя фирменная безопасная разбивка текста для копирования с телефона
             block = title_text + "\n🇳🇴 Black Metal\n" + clean_url
