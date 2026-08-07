@@ -1,65 +1,72 @@
+import os
 import urllib.request
-import urllib.parse
-import json
+import xml.etree.ElementTree as ET
 
-def fetch_bandcamp_final_api():
-    print("🔥 Попытка прорыва через скрытый JSON-шлюз Bandcamp...")
+BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
+ADMIN_CHAT_ID = 5002053185
+
+# Твоя фирменная безопасная ASCII-склейка
+S = chr(47); C = chr(58); W = "www."
+P = "https" + C + S + S
+
+def fetch_bandcamp_rss():
+    print("🔥 Сбор свежего блэка через официальный RSS-шлюз Bandcamp...")
     
-    # Твоя оригинальная склейка URL без изменений
-    url = P + W + "bandcamp.com" + S + "api" + S + "discover" + S + "3" + S + "get_web"
+    # Открытая и стабильная лента Bandcamp по тегу black-metal
+    url = P + "bandcamp.com" + S + "tag" + S + "black-metal" + S + "feed.xml"
     
-    # ИСПРАВЛЕНИЕ: Передаем тег строкой, а не списком!
-    # API Bandcamp не принимает квадратные скобки [] для тега в этом шлюзе.
-    payload = {
-        "tag": "black-metal",
-        "category": "album",
-        "sort_key": "date",
-        "page": 0
-    }
-    
-    # ИСПРАВЛЕНИЕ: Добавляем обязательные заголовки Origin и Referer.
-    # Без них защита Cloudflare на стороне Bandcamp сбрасывает запросы от urllib.
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko)',
-        'Content-Type': 'application/json',
-        'Origin': "https" + C + S + S + "bandcamp.com",
-        'Referer': "https" + C + S + S + "bandcamp.com" + S
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
     }
     
     try:
-        req_data = json.dumps(payload).encode('utf-8')
-        req = urllib.request.Request(url, data=req_data, headers=headers, method='POST')
-        
+        req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=15) as response:
             if response.status != 200:
-                return "❌ Сервер Bandcamp отклонил запрос плеера."
-                
-            data = json.loads(response.read().decode('utf-8'))
+                return "❌ Сервер Bandcamp не ответил на запрос ленты."
+            xml_data = response.read()
             
-        results = data.get("items", [])
-        if not results:
-            return "🫙 На скрытой витрине Bandcamp сейчас пусто."
-            
+        root = ET.fromstring(xml_data)
+        
         packs = []
-        for item in results[:7]: # Берем ровно 7 самых свежих альбомов
-            band = item.get("artist_name", "Unknown Artist").strip()
-            album = item.get("title", "Unknown Album").strip()
-            album_url = item.get("url", "").strip()
+        # Пробегаемся по свежим релизам в XML-ленте
+        for item in root.findall('.//item')[:7]: # Берем 7 самых свежих
+            title_text = item.find('title').text if item.find('title') is not None else "Unknown - Unknown"
+            album_url = item.find('link').text if item.find('link') is not None else ""
             
-            if not album_url: 
+            if not album_url:
                 continue
                 
-            # Чистим ссылку от хвостиков статистики
+            # Чистим ссылку от мусора статистики
             clean_url = album_url.split('?')[0]
             
-            # Твоя фирменная безопасная склейка текста для экрана телефона
-            # Разрываем ссылку, чтобы она гарантированно не ломалась при копировании
-            block = band + " - " + album + "\n🇳🇴 Black Metal\n" + clean_url
+            # Твоя фирменная безопасная разбивка текста для копирования с телефона
+            block = title_text + "\n🇳🇴 Black Metal\n" + clean_url
             packs.append(block)
             
         if packs:
             return "\n---\n".join(packs)
-        return "Свежих релизов в пакете API не обнаружено."
+        return "Свежих релизов в ленте не обнаружено."
         
     except Exception as e:
-        return "❌ Ошибка прорыва через API: " + str(e)
+        return "❌ Ошибка разбора RSS: " + str(e)
+
+def send_to_admin(content_text):
+    api_url = P + "api.telegram.org" + S + "bot" + BOT_TOKEN + S + "sendMessage"
+    formatted_msg = "<b>⚙️ СВЕЖИЙ АВТОНОМНЫЙ БАНДКЭМП-УЛОВ ⚙️</b>\n\n<code>" + content_text + "</code>\n\n<i>Скопируй в один тап! Вставь боту для наполнения кнопки СВЕЖЕЕ!</i>"
+    
+    # Кодируем данные для отправки в Telegram
+    payload = {
+        'chat_id': ADMIN_CHAT_ID,
+        'text': formatted_msg,
+        'parse_mode': 'HTML',
+        'disable_web_page_preview': 'true'
+    }
+    data = urllib.parse.urlencode(payload).encode('utf-8')
+    req = urllib.request.Request(api_url, data=data, method='POST')
+    urllib.request.urlopen(req)
+
+if __name__ == "__main__":
+    report = fetch_bandcamp_rss()
+    send_to_admin(report)
+    
