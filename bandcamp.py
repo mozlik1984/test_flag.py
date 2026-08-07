@@ -1,7 +1,7 @@
 import os
 import urllib.request
 import urllib.parse
-import xml.etree.ElementTree as ET
+import re
 
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_CHAT_ID = 5002053185
@@ -11,9 +11,8 @@ S = chr(47); C = chr(58); W = "www."
 P = "https" + C + S + S
 
 def fetch_bandcamp_rss():
-    print("🔥 Сбор свежего блэка через официальный RSS-шлюз Bandcamp...")
+    print("🔥 Текстовый прорыв через RSS-ленту Bandcamp...")
     
-    # Стабильная и открытая лента Bandcamp по тегу black-metal
     url = P + "www.bandcamp.com" + S + "tag" + S + "black-metal" + S + "feed.xml"
     
     headers = {
@@ -25,24 +24,36 @@ def fetch_bandcamp_rss():
         with urllib.request.urlopen(req, timeout=15) as response:
             if response.status != 200:
                 return "❌ Сервер Bandcamp не ответил на запрос ленты."
+            # Читаем как чистый текст
+            html_text = response.read().decode('utf-8', errors='ignore')
             
-            # ИСПРАВЛЕНИЕ: Декодируем в чистый utf-8 и жестко игнорируем любые 
-            # ломающие спецсимволы (&, <, > и умлауты), на которых спотыкался XML-парсер
-            xml_text = response.read().decode('utf-8', errors='ignore')
-            
-        root = ET.fromstring(xml_text)
+        # Используем регулярные выражения, чтобы вытащить <title> и <link> из каждого <item>
+        # Этот метод никогда не упадет из-за спецсимволов (&, <, >), так как ищет просто текст
+        items = re.findall(r'<item>(.*?)</item>', html_text, re.DOTALL)
         
-        packs = []
-        # Пробегаемся по свежим релизам в XML-ленте
-        for item in root.findall('.//item')[:7]: # Берем 7 самых свежих альбомов
-            title_text = item.find('title').text if item.find('title') is not None else "Unknown - Unknown"
-            album_url = item.find('link').text if item.find('link') is not None else ""
+        if not items:
+            return "Свежих релизов в ленте не обнаружено."
             
-            if not album_url:
+        packs = []
+        for item in items[:7]: # Берем 7 самых свежих
+            # Вытаскиваем название альбома/группы
+            title_match = re.search(r'<title>(.*?)</title>', item, re.DOTALL)
+            # Вытаскиваем ссылку
+            link_match = re.search(r'<link>(.*?)</link>', item, re.DOTALL)
+            
+            if not title_match or not link_match:
                 continue
                 
+            title_text = title_match.group(1).strip()
+            album_url = link_match.group(1).strip()
+            
+            # Декодируем стандартные XML-замены вроде &amp; обратно в нормальный знак &
+            title_text = title_text.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
+            title_text = title_text.replace('<![CDATA[', '').replace(']]>', '')
+            album_url = album_url.replace('<![CDATA[', '').replace(']]>', '')
+            
             # Чистим ссылку от хвостиков статистики
-            clean_url = album_url.split('?')
+            clean_url = album_url.split('?')[0]
             
             # Твоя фирменная безопасная разбивка текста для копирования с телефона
             block = title_text + "\n🇳🇴 Black Metal\n" + clean_url
@@ -50,16 +61,15 @@ def fetch_bandcamp_rss():
             
         if packs:
             return "\n---\n".join(packs)
-        return "Свежих релизов в ленте не обнаружено."
+        return "Свежих релизов после фильтрации не обнаружено."
         
     except Exception as e:
-        return "❌ Ошибка разбора RSS: " + str(e)
+        return "❌ Ошибка текстового разбора ленты: " + str(e)
 
 def send_to_admin(content_text):
     api_url = P + "api.telegram.org" + S + "bot" + BOT_TOKEN + S + "sendMessage"
     formatted_msg = "<b>⚙️ СВЕЖИЙ АВТОНОМНЫЙ БАНДКЭМП-УЛОВ ⚙️</b>\n\n<code>" + content_text + "</code>\n\n<i>Скопируй в один тап! Вставь боту для наполнения кнопки СВЕЖЕЕ!</i>"
     
-    # Кодируем данные для отправки в Telegram
     payload = {
         'chat_id': ADMIN_CHAT_ID,
         'text': formatted_msg,
