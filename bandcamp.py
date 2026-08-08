@@ -13,8 +13,8 @@ s = chr(47)
 # Посимвольная монолитная сборка прокси-домена: https://codetabs.com
 PROXY_DOM = f"https{c}{s}{s}api{d}codetabs{d}com{s}cors-proxy{s}"
 
-# Посимвольная монолитная сборка адреса фидов: https://bandcamp.com
-FEED_DOM = f"https{c}{S}{s}bandcamp{d}com{s}feed{s}tag{s}"
+# ИСПРАВЛЕНО: Все слеши строго маленькой буквой {s}! https://bandcamp.com
+FEED_DOM = f"https{c}{s}{s}bandcamp{d}com{s}feed{s}tag{s}"
 
 # Базовый адрес отправки сообщений Telegram: https://telegram.org
 BASE_TG = f"https{c}{s}{s}api{d}telegram{d}org{s}bot"
@@ -57,7 +57,6 @@ def parse_bandcamp_rss_cascade():
     current_year = str(now.year)
 
     for tag in BLACK_METAL_TAGS:
-        # Безопасная автоматическая склейка адресов без единого текстового слеша!
         target_url = f"{FEED_DOM}{tag}"
         full_proxy_url = f"{PROXY_DOM}{target_url}"
         
@@ -72,7 +71,6 @@ def parse_bandcamp_rss_cascade():
             if res.status_code != 200 or not res.text:
                 continue
                 
-            # Парсим XML-структуру Atom Feed
             root = ET.fromstring(res.text)
             ns = {'atom': 'http://w3.org'}
             entries = root.findall('atom:entry', ns)
@@ -95,18 +93,15 @@ def parse_bandcamp_rss_cascade():
                 if len(debug_log["sample_titles"]) < 3:
                     debug_log["sample_titles"].append(title_text[:40])
 
-                # Проверяем на жесткие блэк-метал исключения
                 if any(forbidden in title_text.lower() for forbidden in FORBIDDEN_KEYWORDS):
                     debug_log["skipped_by_filters"] += 1
                     continue
 
-                # Разбираем стандартную строку RSS вида "Album Name by Band Name"
                 if " by " in title_text:
                     title, artist = title_text.rsplit(" by ", 1)
                 else:
                     title, artist = title_text, "Underground Artist"
 
-                # Проверяем контекст для установки флага страны
                 flag = "🇳🇴"  # Тру-дефолт
                 summary_tag = entry.find('atom:summary', ns)
                 summary_text = summary_tag.text.lower() if summary_tag is not None else ""
@@ -129,7 +124,6 @@ def parse_bandcamp_rss_cascade():
                 seen_urls.add(album_url)
 
         except Exception as e:
-            # Сохраняем ошибку, если что-то пошло не так внутри цикла
             if not debug_log["error_message"]:
                 debug_log["error_message"] = str(e)
             continue
@@ -137,9 +131,8 @@ def parse_bandcamp_rss_cascade():
     return found_releases[:15], debug_log
 
 def send_to_telegram(releases, debug_log):
-    samples_str = ", ".join([f"'{t}'" for t in debug_log["sample_titles"]])
+    samples_str = ", ".join([f"'{t}'" for t in debug_log["raw_titles_sample"]])
     
-    # Сборка диагностической карты
     msg = f"<b>🔎 ПОСТОЯННЫЙ ЛОГ ОТЛАДКИ RSS-FEED</b>\n\n"
     msg += f"<b>📊 Метрики шлюза:</b>\n"
     msg += f"• Код ответа прокси: <code>{debug_log['status_code']}</code>\n"
@@ -158,10 +151,9 @@ def send_to_telegram(releases, debug_log):
         for r in releases:
             msg += f"<code>{r['artist']} - {r['title']} ({r['year']})</code>\n"
             msg += f"{r['flag']} {r['genre']}\n"
-            msg += f"https{c}{s}{s}youtube{d}com {r['month']}\n" # Монолитная сборка ссылки-заглушки!
+            msg += f"https{c}{s}{s}youtube{d}com {r['month']}\n"
             msg += "---\n"
 
-    # Безопасная склейка адреса отправки Telegram
     telegram_url = f"{BASE_TG}{BOT_TOKEN}{s}sendMessage"
     payload = {
         "chat_id": ADMIN_CHAT_ID,
