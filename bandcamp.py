@@ -72,11 +72,11 @@ def parse_bandcamp_mobile_api():
                         else:
                             rel_date = datetime.strptime(rel_date_str, "%d %b %Y")
                         
-                        # ИСПРАВЛЕНО: проверяем ИЮЛЬ (7) или АВГУСТ (8) 2026 года
-                        if rel_date.year == 2026 and rel_date.month in:
+                        # Заменили "in" на "> 6", чтобы телефон не воровал скобки!
+                        if rel_date.year == 2026 and rel_date.month > 6:
                             is_target_period = True
                     except Exception:
-                        is_target_period = True  # Если формат сложный, берем в улов для теста
+                        is_target_period = True
                 else:
                     is_target_period = True
 
