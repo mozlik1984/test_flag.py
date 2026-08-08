@@ -7,19 +7,65 @@ jobs:
   run-bandcamp-script:
     runs-on: ubuntu-latest
     steps:
-      # ЖЕСТКАЯ ПРОВЕРКА СВЯЗИ: Прямой выстрел в Telegram API без посредников
-      - name: Total Telegram Test
-        env:
-          TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          CHAT_ID: "5002053185"
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
         run: |
-          # Собираем простую текстовую строку строго по твоему формату!
-          TEXT_LINE="<code>Darkthrone - Transilvanian Hunger (2026)</code>%0A[Norway] Black Metal%0Ahttps://youtube.com AUG%0A---"
-          
-          # Стреляем напрямую в серверы Дурова
-          curl -s -X POST "https://telegram.org" \
-            -d "chat_id=$CHAT_ID" \
-            -d "text=$TEXT_LINE" \
-            -d "parse_mode=HTML" \
-            -d "disable_web_page_preview=true"
-            
+          python -m pip install --upgrade pip
+          pip install beautifulsoup4 curl_cffi
+
+      # СБОРЩИК САМ СОЗДАСТ ЧИСТЫЙ ФАЙЛ БЕЗ БАГОВ КОПИРОВАНИЯ
+      - name: Auto-generate python script
+        run: |
+          cat << 'EOF' > test_metal.py
+          import json
+          from bs4 import BeautifulSoup
+          from curl_cffi import requests as cloud_requests
+
+          # Берем самый широкий тег METAL для проверки пробива защиты
+          URL = "https://bandcamp.com"
+          HEADERS = {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+          }
+
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 1 ---")
+          try:
+              # Прошиваем Cloudflare имитацией браузера Chrome
+              res = cloud_requests.get(URL, headers=HEADERS, impersonate="chrome110", timeout=20)
+              print(f"1. Код ответа сервера Bandcamp: {res.status_code}")
+              print(f"2. Количество полученных символов HTML: {len(res.text)}")
+              
+              if res.status_code == 200 and len(res.text) > 5000:
+                  soup = BeautifulSoup(res.text, "html.parser")
+                  pagedata_tag = soup.find("div", id="pagedata") or soup.find("script", {"id": "pagedata"})
+                  
+                  if pagedata_tag:
+                      print("3. УСПЕХ: Скрытый блок pagedata успешно обнаружен!")
+                      raw_blob = pagedata_tag.get("data-blob") or pagedata_tag.text
+                      data = json.loads(raw_blob)
+                      dig_deeper = data.get("hub_data", {}).get("tabs", {}).get("dig_deeper", {}).get("initial_results", [])
+                      
+                      print(f"4. Всего сырых релизов найдено в блоке: {len(dig_deeper)}")
+                      print("5. Первые 3 релиза в выдаче сайта:")
+                      for item in dig_deeper[:3]:
+                          print(f"   -> {item.get('artist')} - {item.get('title')}")
+                  else:
+                      print("3. СБОЙ: Блок pagedata отсутствует. Bandcamp подсунул пустую страницу-заглушку.")
+              else:
+                  print("3. СБОЙ: Получен пустой HTML или код ошибки.")
+                  
+          except Exception as e:
+              print(f"КРИТИЧЕСКАЯ ОШИБКА: {e}")
+          print("--- КОНЕЦ ДИАГНОСТИКИ ---")
+          EOF
+
+      # Запускаем скрипт и выводим лог прямо на экран GitHub Actions
+      - name: Run Metal Test Parser
+        run: python test_metal.py
+        
