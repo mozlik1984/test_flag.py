@@ -20,7 +20,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install beautifulsoup4 curl_cffi
 
-      # ШАГ 6.1: Читаем ленту через BeautifulSoup, чтобы избежать синтаксических ошибок парсера
+      # ШАГ 6.2: Переключаемся на стандартный встроенный html.parser
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
@@ -32,36 +32,33 @@ jobs:
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 6.1 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 6.2 ---")
           try:
               res = cloud_requests.get(URL_RSS, headers=HEADERS, impersonate="chrome110", timeout=20)
               print(f"1. Код ответа Bandcamp: {res.status_code}")
               print(f"2. Количество символов в ленте: {len(res.text)}")
               
               if res.status_code == 200 and len(res.text) > 1000:
-                  # Используем lxml/html парсер BeautifulSoup, он проглотит любые нестыковки тегов
-                  soup = BeautifulSoup(res.text, "xml")
+                  # ИСПРАВЛЕНО: Используем стандартный html.parser, он есть всегда
+                  soup = BeautifulSoup(res.text, "html.parser")
                   
-                  # В RSS/Atom лентах Bandcamp названия всегда лежат внутри тегов <title>
-                  entries = soup.find_all("entry")
-                  print(f"3. Всего музыкальных карточек в ленте: {len(entries)}")
+                  # Находим все теги <title> внутри скачанной ленты
+                  titles = soup.find_all("title")
+                  print(f"3. Всего тегов title обнаружено: {len(titles)}")
                   
-                  print("\n4. СЫРОЙ ТЕКСТ ПЕРВЫХ 5 КАРТОЧЕК ИЗ ЛЕНТЫ:")
-                  for entry in entries[:5]:
-                      title_tag = entry.find("title")
-                      if title_tag:
-                          print(f"   -> Найдена строка: {title_tag.text.strip()}")
-                      else:
-                          print("   -> Карточка найдена, но тег title внутри пуст")
+                  print("\n4. СЫРЫЕ СТРОКИ ИЗ ЛЕНТЫ:")
+                  # Выводим первые несколько штук, чтобы увидеть живой текст
+                  for t in titles[:7]:
+                      print(f"   -> Текст тега: {t.text.strip()}")
               else:
-                  print("3. СБОЙ: Сервер прислал пустой ответ.")
+                  print("3. СБОЙ: Лента пуста.")
                   
           except Exception as e:
               print(f"КРИТИЧЕСКАЯ ОШИБКА: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем чистый текстовый тест
+      # Запускаем исправленный текстовый тест
       - name: Run RSS Content Test
         run: python test_metal.py
         
