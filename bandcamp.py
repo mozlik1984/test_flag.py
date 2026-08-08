@@ -4,9 +4,9 @@ from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
 
-# Конфигурация из секретов GitHub (рекомендуется) или напрямую переменными
-BOT_TOKEN = os.getenv("TELEGRAM_TOKEN", "ВАШ_ТОКЕН_БОТА")
-ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "5002053185")
+# Конфигурация
+BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
+ADMIN_CHAT_ID = "5002053185"  # Жестко прописан ваш ID чата
 
 BLACK_METAL_TAGS = [
     "black-metal", "atmospheric-black-metal", "depressive-black-metal", 
@@ -17,7 +17,7 @@ BLACK_METAL_TAGS = [
 FORBIDDEN_TAGS = ["thrash-metal", "death-metal", "heavy-metal", "power-metal", "metalcore"]
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
 def parse_bandcamp_current_month():
@@ -49,14 +49,14 @@ def parse_bandcamp_current_month():
                 if any(forbidden in item_tags for forbidden in FORBIDDEN_TAGS):
                     continue
                 
+                # Исправленная очистка ссылки от реферальных хвостов (берем только до знака ?)
+                clean_url = album_url.split('?')[0]
+                
                 rel_date_str = item.get("release_date")
                 if rel_date_str:
                     try:
                         rel_date = datetime.strptime(rel_date_str, "%d %b %Y")
-                        # Берем релизы только текущего месяца и года
                         if rel_date.month == now.month and rel_date.year == now.year:
-                            # Чистим ссылку от хвостов
-                            clean_url = album_url.split('?')[0]
                             found_releases.append({
                                 "artist": item.get("artist"),
                                 "title": item.get("title"),
@@ -65,7 +65,6 @@ def parse_bandcamp_current_month():
                             seen_urls.add(album_url)
                     except Exception:
                         # Если дату не распарсить, но это свежий фид — забираем
-                        clean_url = album_url.split('?')[0]
                         found_releases.append({
                             "artist": item.get("artist"),
                             "title": item.get("title"),
@@ -77,21 +76,24 @@ def parse_bandcamp_current_month():
             print(f"Ошибка тега {tag}: {e}")
             continue
             
+    print(f"Всего найдено подходящих релизов: {len(found_releases)}")
     return found_releases[:15]
 
 def send_to_telegram(releases):
     if not releases:
-        print("Новых релизов блэка не найдено.")
+        # Теперь бот пришлет уведомление, даже если улов пуст — так вы поймете, что связь работает!
+        msg = "<b>🇳🇴 АВТОНОМНЫЙ БЛЭК-МЕТАЛ ПАРСЕР</b>\n\nЗа текущий период новых релизов на главной странице не обнаружено."
+    else:
+        months_ru = {1:"Январь", 2:"Февраль", 3:"Март", 4:"Апрель", 5:"Май", 6:"Июнь", 7:"Июль", 8:"Август", 9:"Сентябрь", 10:"Октябрь", 11:"Ноябрь", 12:"Декабрь"}
+        now = datetime.now()
+        msg = f"<b>🇳🇴 АВТОНОМНЫЙ БЛЭК-МЕТАЛ УЛОВ ({months_ru[now.month]} {now.year})</b>\n\n"
+        for r in releases:
+            msg += f"• <code>{r['artist']} - {r['title']}</code>\n🔗 {r['url']}\n\n"
+
+    if not BOT_TOKEN:
+        print("Ошибка: Токен Telegram (TELEGRAM_TOKEN) не найден в переменных окружения!")
         return
 
-    months_ru = {1:"Январь", 2:"Февраль", 3:"Март", 4:"Апрель", 5:"Май", 6:"Июнь", 7:"Июль", 8:"Август", 9:"Сентябрь", 10:"Октябрь", 11:"Ноябрь", 12:"Декабрь"}
-    now = datetime.now()
-    
-    msg = f"<b>🇳🇴 АВТОНОМНЫЙ БЛЭК-МЕТАЛ УЛОВ ({months_ru[now.month]} {now.year})</b>\n\n"
-    for r in releases:
-        msg += f"• <code>{r['artist']} - {r['title']}</code>\n🔗 {r['url']}\n\n"
-
-    # Простая отправка через прямой API-запрос (без запуска тяжелого бота)
     telegram_url = f"https://telegram.org{BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": ADMIN_CHAT_ID,
@@ -102,9 +104,9 @@ def send_to_telegram(releases):
     
     res = requests.post(telegram_url, json=payload)
     if res.status_code == 200:
-        print("Улов успешно отправлен в Telegram!")
+        print("Результат успешно отправлен в Telegram!")
     else:
-        print(f"Ошибка отправки в Telegram: {res.text}")
+        print(f"Ошибка отправки в Telegram API: {res.status_code} - {res.text}")
 
 if __name__ == "__main__":
     results = parse_bandcamp_current_month()
