@@ -20,7 +20,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install beautifulsoup4 curl_cffi
 
-      # ШАГ 2 (ИСПРАВЛЕНО): Выводим точную карту ключей без синтаксических ошибок
+      # ШАГ 3: Собираем музыку напрямую из HTML-верстки, игнорируя пустой JSON
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
@@ -33,42 +33,52 @@ jobs:
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 2 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 3 ---")
           try:
-              # ИСПРАВЛЕНО: Регистр переменной HEADERS теперь совпадает идеально
               res = cloud_requests.get(URL, headers=HEADERS, impersonate="chrome110", timeout=20)
               
               if res.status_code == 200:
                   soup = BeautifulSoup(res.text, "html.parser")
-                  pagedata_tag = soup.find("div", id="pagedata") or soup.find("script", {"id": "pagedata"})
                   
-                  if pagedata_tag:
-                      raw_blob = pagedata_tag.get("data-blob") or pagedata_tag.text
-                      data = json.loads(raw_blob)
+                  # Ищем карточки альбомов по стандартным классам Bandcamp (сетка сетки)
+                  items = soup.find_all("li", class_="item") or soup.find_all("div", class_="item") or soup.find_all(class_="hub-item")
+                  
+                  # Если специализированные классы не найдены, соберем все ссылки на альбомы
+                  if not items:
+                      print("Специфичные классы не найдены, переключаюсь на сбор по тегам ссылок...")
+                      all_links = soup.find_all("a", href=True)
+                      album_links = [l for l in all_links if "/album/" in l["href"]]
+                      print(f"1. Всего ссылок на альбомы в верстке: {len(album_links)}")
                       
-                      print("1. Главные ключи в pagedata JSON:")
-                      print(list(data.keys()))
-                      
-                      # Заходим на уровень глубже в самые подозрительные блоки
-                      for key in ["hub_data", "tag_data", "items", "tracks"]:
-                          if key in data:
-                              print(f"\n2. Ключи внутри подблока '{key}':")
-                              if isinstance(data[key], dict):
-                                  print(list(data[key].keys()))
-                                  
-                                  # Ищем секцию вкладок (tabs)
-                                  if "tabs" in data[key] and isinstance(data[key]["tabs"], dict):
-                                      print(f"   -> Найдена секция tabs! Ее подразделы: {list(data[key]['tabs'].keys())}")
-                              else:
-                                  print(f"   -> Этот блок является списком длиной {len(data[key])} элементов")
+                      print("\n2. Первые 5 найденных релизов:")
+                      seen = set()
+                      count = 0
+                      for link in album_links:
+                          text = link.text.strip()
+                          href = link["href"]
+                          if text and len(text) > 3 and text not in seen and "buy" not in text.lower():
+                              print(f"   -> Релиз: {text} | Ссылка: {href}")
+                              seen.add(text)
+                              count += 1
+                              if count >= 5:
+                                  break
                   else:
-                      print("СБОЙ: Не удалось найти pagedata")
+                      print(f"1. Найдено стандартных блоков карточек: {len(items)}")
+                      print("\n2. Первые 5 релизов из карточек:")
+                      for item in items[:5]:
+                          title_tag = item.find(class_="title") or item.find("a")
+                          artist_tag = item.find(class_="artist")
+                          
+                          title = title_tag.text.strip() if title_tag else "Unknown Album"
+                          artist = artist_tag.text.strip() if artist_tag else "Unknown Artist"
+                          print(f"   -> {artist} - {title}")
+                          
           except Exception as e:
-              print(f"ОШИБКА: {e}")
+              print(f"ОШИБКА ПАРСИНГА ВЕРСТКИ: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем исправленный структурный тест
-      - name: Run Structure Test
+      # Запускаем HTML-тест на экране Гитхаба
+      - name: Run HTML Layout Test
         run: python test_metal.py
         
