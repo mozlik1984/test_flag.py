@@ -20,44 +20,49 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4 curl_cffi typing_extensions
 
-      # ШАГ 8.3: Читаем сырой текст ответа API без падения метода .json()
+      # ШАГ 8.4: Точечная проверка официального GraphQL API шлюза Bandcamp
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
+          import json
           from curl_cffi import requests as cloud_requests
 
+          # Единый современный шлюз данных Bandcamp GraphQL
           URL_API = "https://bandcamp.com"
           
           HEADERS = {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              "Content-Type": "application/json"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 8.3 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 8.4 ---")
           try:
-              params = {
-                  "tag": "black-metal",
-                  "sort": "date",
-                  "page": 1
+              # Базовый GraphQL запрос для получения списка релизов по тегу black-metal
+              payload = {
+                  "query": "query GetTagItems($tag: String!, $sort: String!, $page: Int!) { tag_items(tag: $tag, sort: $sort, page: $page) { id name artist_name } }",
+                  "variables": {
+                      "tag": "black-metal",
+                      "sort": "date",
+                      "page": 1
+                  }
               }
               
-              res = cloud_requests.get(URL_API, params=params, headers=HEADERS, impersonate="chrome110", timeout=20)
-              print(f"1. Код ответа GET-API Bandcamp: {res.status_code}")
-              print(f"2. Количество символов в ответе: {len(res.text)}")
+              res = cloud_requests.post(URL_API, json=payload, headers=HEADERS, impersonate="chrome110", timeout=20)
+              print(f"1. Код ответа GraphQL API: {res.status_code}")
+              print(f"2. Количество символов в ответе шлюза: {len(res.text)}")
               
               if res.status_code == 200 and len(res.text) > 0:
-                  # Печатаем самое начало ответа, чтобы увидеть его реальную структуру
-                  # Заменяем скобки, чтобы Гитхаб логов не скрыл их как теги
                   clean_sample = res.text[:300].replace("<", "&lt;").replace(">", "&gt;")
-                  print(f"3. Сырой срез ответа сервера: {clean_sample}")
+                  print(f"3. Сырой срез ответа GraphQL: {clean_sample}")
               else:
-                  print("3. СБОЙ: Сервер вернул абсолютно пустой ответ.")
+                  print(f"3. Шлюз ответил отказом. Текст ошибки: {res.text[:200]}")
                   
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 8.3: {e}")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 8.4: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем чтение сырого текста
+      # Запускаем точечный тест GraphQL
       - name: Run Token API Test
         run: python test_metal.py
         
