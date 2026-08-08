@@ -4,10 +4,17 @@ from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
 
-# Строгое архитектурное правило: сборка служебных знаков через ASCII
+# Строгое архитектурное правило: сборка служебных знаков и эмодзи через ASCII/Юникод
 d = chr(46)
 c = chr(58)
 s = chr(47)
+
+# Собираем эмодзи через Юникод-коды, чтобы телефон не ломал синтаксис!
+EMOJI_LUPA = chr(0x1F50E)  # 🔎
+EMOJI_DIAG = chr(0x1F4CA)  # 📊
+EMOJI_CROSS = chr(0x274C)  # ❌
+EMOJI_FIRE = chr(0x1F525)   # 🔥
+EMOJI_DEFAULT_FLAG = chr(0x1F1E7) + chr(0x1F1FB)  # 🇧🇻 (Тру-дефолт флаг острова Буве для блэка)
 
 # Посимвольная сборка неблокируемого шлюза виджетов: https://bandcamp.com
 EMBED_DOM = f"https{c}{s}{s}bandcamp{d}com{s}EmbeddedPlayer"
@@ -26,10 +33,20 @@ BLACK_METAL_TAGS = [
 
 FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk"]
 
+# Кодируем флаги стран через пары Юникод-символов региональных индикаторов
 COUNTRY_FLAGS = {
-    "norway": "🇳🇴", "sweden": "🇸🇪", "finland": "🇫🇮", "france": "🇫🇷",
-    "germany": "🇩🇪", "usa": "🇺🇸", "united states": "🇺🇸", "ukraine": "🇺🇦", 
-    "poland": "🇵🇱", "austria": "🇦🇹", "italy": "🇮🇹", "canada": "🇨🇦", 
+    "norway": chr(0x1F1E6) + chr(0x1F1F4),        # 🇳🇴
+    "sweden": chr(0x1F1F8) + chr(0x1F1EA),        # 🇸🇪
+    "finland": chr(0x1F1EB) + chr(0x1F1EE),       # 🇫🇮
+    "france": chr(0x1F1EB) + chr(0x1F1F7),        # 🇫🇷
+    "germany": chr(0x1F1DE) + chr(0x1F1EA),       # 🇩🇪
+    "usa": chr(0x1F1FA) + chr(0x1F1F8),           # 🇺🇸
+    "united states": chr(0x1F1FA) + chr(0x1F1F8), # 🇺🇸
+    "ukraine": chr(0x1F1FA) + chr(0x1F1E6),       # 🇺🇦
+    "poland": chr(0x1F1F5) + chr(0x1F1B1),        # 🇵🇱
+    "austria": chr(0x1F1E6) + chr(0x1F1F9),       # 🇦🇹
+    "italy": chr(0x1F1EE) + chr(0x1F1F9),         # 🇮🇹
+    "canada": chr(0x1F1E4) + chr(0x1F1E6),        # 🇨🇦
     "iceland": "🇮🇸", "greece": "🇬🇷", "russia": "🇷🇺", "united kingdom": "🇬🇧"
 }
 
@@ -38,7 +55,6 @@ def parse_bandcamp_embedded_perfect():
     found_releases = []
     seen_identities = set()
     
-    # Карта отладки (ВСЕГДА отправляется в Telegram)
     debug_log = {
         "status_code": 0,
         "raw_text_length": 0,
@@ -57,7 +73,6 @@ def parse_bandcamp_embedded_perfect():
     }
 
     for tag in BLACK_METAL_TAGS:
-        # v=2 — это параметр, запрашивающий сетку со свежими релизами внутри плеера
         params = {"tag": tag, "v": "2"}
         try:
             res = requests.get(EMBED_DOM, params=params, headers=headers, timeout=15)
@@ -70,8 +85,6 @@ def parse_bandcamp_embedded_perfect():
                 continue
                 
             soup = BeautifulSoup(res.text, "html.parser")
-            
-            # Внутри верстки плеера альбомы всегда лежат в блоках art-link или visual
             artworks = soup.find_all("div", class_="visual") or soup.find_all("a", class_="art-link") or soup.find_all("img")
             
             for art in artworks:
@@ -79,15 +92,14 @@ def parse_bandcamp_embedded_perfect():
                 if not img_tag or not img_tag.has_attr("alt"):
                     continue
                     
-                # Названия зашиты в атрибут alt картинок в формате "Album Name by Band Name"
                 album_info = img_tag["alt"].strip()
                 if not album_info or " by " not in album_info:
                     continue
                     
                 debug_log["total_parsed_items"] += 1
                 
-                if len(debug_log["sample_titles"]) 🔎 ПОСТОЯННЫЙ ЛОГ ОТЛАДКИ EMBEDDED PLAYER</b>\n\n"
-    msg += f"<b>📊 Метрики шлюза:</b>\n"
+                if len(debug_log["sample_titles"]) {EMOJI_LUPA} ПОСТОЯННЫЙ ЛОГ ОТЛАДКИ EMBEDDED PLAYER</b>\n\n"
+    msg += f"<b>{EMOJI_DIAG} Метрики шлюза:</b>\n"
     msg += f"• Код ответа Bandcamp: <code>{debug_log['status_code']}</code>\n"
     msg += f"• Получено символов HTML: <code>{debug_log['raw_text_length']}</code>\n"
     msg += f"• Элементов найдено в верстке: <code>{debug_log['total_parsed_items']}</code>\n"
@@ -98,16 +110,15 @@ def parse_bandcamp_embedded_perfect():
     msg += "\n"
     
     if not releases:
-        msg += "❌ <b>Результат фильтра:</b> Живых блэк-метал новинок внутри виджета не распознано."
+        msg += f"{EMOJI_CROSS} <b>Результат фильтра:</b> Живых блэк-метал новинок внутри виджета не распознано."
     else:
-        msg += "🔥 <b>НОВЫЕ ЖИВЫЕ РЕЛИЗЫ С BANDCAMP:</b>\n\n"
+        msg += f"{EMOJI_FIRE} <b>НОВЫЕ ЖИВЫЕ РЕЛИЗЫ С BANDCAMP:</b>\n\n"
         for r in releases:
             msg += f"<code>{r['artist']} - {r['title']} ({r['year']})</code>\n"
             msg += f"{r['flag']} {r['genre']}\n"
-            msg += f"https{c}{s}{s}youtube{d}com {r['month']}\n"  # Твой жесткий формат ссылки-заглушки!
+            msg += f"https{c}{s}{s}youtube{d}com {r['month']}\n"
             msg += "---\n"
 
-    # Безопасная склейка адреса отправки Telegram
     telegram_url = f"{BASE_TG}{BOT_TOKEN}{s}sendMessage"
     payload = {
         "chat_id": ADMIN_CHAT_ID,
