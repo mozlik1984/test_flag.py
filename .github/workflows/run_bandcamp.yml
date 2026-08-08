@@ -18,12 +18,14 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install curl_cffi typing_extensions
+          pip install curl_cffi html5lib
 
-      # ШАГ 6.9: Сканируем живой HTML на наличие скрытого музыкального блока данных
+      # ШАГ 7: Раскодируем data-blob в чистый Python-словарь
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
+          import json
+          import html
           from curl_cffi import requests as cloud_requests
 
           URL_RSS = "https://bandcamp.com"
@@ -31,44 +33,53 @@ jobs:
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 6.9 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 7 ---")
           try:
               res = cloud_requests.get(URL_RSS, headers=HEADERS, impersonate="chrome110", timeout=20)
               
               if res.status_code == 200 and len(res.text) > 1000:
-                  html = res.text
+                  html_content = res.text
+                  marker = 'data-blob="'
                   
-                  # Ищем ключевую сигнатуру современной верстки Bandcamp
-                  marker = 'data-initial-items="'
-                  if marker in html:
-                      print("1. УСПЕХ: Блок data-initial-items успешно найден!")
-                      start_idx = html.find(marker) + len(marker)
-                      # Печатаем срез данных, чтобы увидеть, группы ли там лежат
-                      print(f"2. Срез сырых данных: {html[start_idx:start_idx+400]}")
-                  else:
-                      print("1. Метрика data-initial-items не найдена.")
+                  if marker in html_content:
+                      start_idx = html_content.find(marker) + len(marker)
+                      end_idx = html_content.find('"', start_idx)
                       
-                      # Проверим альтернативный современный маркер релизов
-                      alt_marker = 'data-blob="'
-                      if alt_marker in html:
-                          print("1.1. Найдена альтернативная метка data-blob!")
-                          start_idx = html.find(alt_marker) + len(alt_marker)
-                          print(f"2.1. Срез alt-данных: {html[start_idx:start_idx+400]}")
-                      else:
-                          print("1.1. Альтернативные метки тоже отсутствуют.")
+                      # Вырезаем сырую зашифрованную строку
+                      raw_blob = html_content[start_idx:end_idx]
+                      
+                      # Шаг 1: Очищаем HTML-сущности (&quot; превращаются в нормальные кавычки)
+                      clean_blob = html.unescape(raw_blob)
+                      
+                      # Шаг 2: Превращаем строку в официальный JSON-словарь Python
+                      data = json.loads(clean_blob)
+                      print("1. УСПЕХ: data-blob успешно десериализован в JSON!")
+                      
+                      # Выводим на экран ключи первого уровня, чтобы найти массив с музыкой
+                      print(f"2. Главные ключи внутри data-blob: {list(data.keys())}")
+                      
+                      # Проверяем самый сочный блок контента — appData
+                      app_data = data.get("appData", {})
+                      if app_data and isinstance(app_data, dict):
+                          print(f"3. Найдена секция appData! Ее подразделы: {list(app_data.keys())}")
                           
-                          # Ищем вообще любое упоминание названий групп (проверим слово "by ")
-                          by_count = html.count(" by ")
-                          print(f"2.2. Всего вхождений маркера ' by ' в коде страницы: {by_count}")
+                          # Ищем блоки с упоминаниемEditorial, Hub, Tags или Items
+                          for sub_key in ["hub", "tag", "results", "featuredEditorial"]:
+                              if sub_key in app_data:
+                                  print(f"   -> Подблок '{sub_key}' обнаружен!")
+                      else:
+                          print("3. Блок appData пуст или имеет неверный формат.")
+                  else:
+                      print("СБОЙ: Маркер data-blob пропал со страницы.")
               else:
                   print("СБОЙ: Страница пуста.")
                   
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА: {e}")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 7: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем поиск маркера
-      - name: Run RSS Content Test
+      # Запускаем десериализацию JSON
+      - name: Run JSON Decode Test
         run: python test_metal.py
         
