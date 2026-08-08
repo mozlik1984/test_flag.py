@@ -33,21 +33,25 @@ jobs:
           import json
           from datetime import datetime
           import requests
-          from bs4 import BeautifulSoup
           from curl_cffi import requests as cloud_requests
 
           d = chr(46)
           c = chr(58)
           s = chr(47)
 
-          BASE_API = f"https{c}{s}{s}bandcamp{d}com{s}api{s}v1{s}search"
+          # ПЕРЕКЛЮЧЕНО НА РАБОЧИЙ ШЛЮЗ ДАННЫХ BANDCAMP
+          BASE_API = f"https{c}{s}{s}bandcamp{d}com{s}api{s}hub{s}2{s}dig_deeper"
           BASE_TG = f"https{c}{s}{s}api{d}telegram{d}org{s}bot"
 
           BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
           ADMIN_CHAT_ID = "5002053185"
 
-          # ИСПРАВЛЕНО: Ищем по одному строгому слову, чтобы шлюз не выдавал 0 результатов
-          QUERIES = ["black-metal", "blackgaze"]
+          BLACK_METAL_TAGS = [
+              "black-metal", "atmospheric-black-metal", "depressive-black-metal", 
+              "raw-black-metal", "symphonic-black-metal", "post-black-metal", 
+              "melodic-black-metal", "blackgaze"
+          ]
+
           FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk"]
 
           def run_furious_parser():
@@ -63,11 +67,15 @@ jobs:
               month_tag = now.strftime("%b").upper()
               current_year = str(now.year)
 
-              for query in QUERIES:
-                  # Добавили жесткий тег в параметры, чтобы Bandcamp выгрузил весь андеграунд
-                  params = {"q": query, "item_type": "a", "tags": query, "page": 1}
+              for tag in BLACK_METAL_TAGS:
+                  # Легальные параметры POST-запроса для актуального API
+                  payload = {
+                      "tag": tag,
+                      "sort_key": "date",
+                      "page": 0
+                  }
                   try:
-                      res = cloud_requests.get(BASE_API, params=params, impersonate="chrome110", timeout=15)
+                      res = cloud_requests.post(BASE_API, json=payload, impersonate="chrome110", timeout=15)
                       
                       if status_code == 0:
                           status_code = res.status_code
@@ -76,16 +84,17 @@ jobs:
                           continue
                           
                       data = res.json()
-                      items = data.get("results", [])
+                      # В этом API альбомы лежат либо в 'items', Bird в 'results'
+                      items = data.get("items", []) or data.get("results", [])
                       
                       for item in items:
                           total_search_items += 1
-                          album_url = item.get("item_url") or item.get("url")
+                          album_url = item.get("tralbum_url") or item.get("url")
                           if not album_url or album_url in seen_urls:
                               continue
                               
-                          title = item.get("name", "Unknown Album").strip()
-                          artist = item.get("artist_name", "Unknown Artist").strip()
+                          title = item.get("title", "Unknown Album").strip()
+                          artist = item.get("artist", "Unknown Artist").strip()
                           
                           tags_list = [t.lower() for t in item.get("tags", [])]
                           full_desc = f"{title} {artist} {' '.join(tags_list)}".lower()
@@ -97,16 +106,24 @@ jobs:
                           if len(sample_titles) < 3:
                               sample_titles.append(f"{artist} - {title}"[:35])
 
-                          location = item.get("location", "Norway").strip()
-                          if ", " in location:
-                              location = location.split(", ")[-1]
+                          location = item.get("artist_location", "").lower() or item.get("location", "").lower()
+                          flag = "[Norway]"
+                          if "sweden" in location: flag = "[Sweden]"
+                          elif "finland" in location: flag = "[Finland]"
+                          elif "france" in location: flag = "[France]"
+                          elif "germany" in location: flag = "[Germany]"
+                          elif "usa" in location or "united states" in location: flag = "[USA]"
+                          elif "ukraine" in location: flag = "[Ukraine]"
+                          elif "poland" in location: flag = "[Poland]"
+
+                          genre_text = tag.replace("-", " ").title()
 
                           found_releases.append({
                               "artist": artist,
                               "title": title,
                               "year": current_year,
-                              "country": location,
-                              "genre": "Black Metal"
+                              "country": flag,
+                              "genre": genre_text
                           })
                           seen_urls.add(album_url)
 
@@ -116,7 +133,7 @@ jobs:
 
               samples_str = ", ".join([f"'{t}'" for t in sample_titles])
               
-              msg = "DIAGNOSTIC LOG SEARCH API\n\n"
+              msg = "DIAGNOSTIC LOG HUB API\n\n"
               msg += "METRICS:\n"
               msg += f"Bandcamp status: {status_code}\n"
               msg += f"Total search items: {total_search_items}\n"
@@ -129,7 +146,7 @@ jobs:
                   msg += "NEW RELEASES FROM BANDCAMP:\n\n"
                   for r in found_releases:
                       msg += f"<code>{r['artist']} - {r['title']} ({r['year']})</code>\n"
-                      msg += f"[{r['country']}] {r['genre']}\n"
+                      msg += f"{r['country']} {r['genre']}\n"
                       msg += f"https{c}{s}{s}youtube{d}com {month_tag}\n"
                       msg += "---\n"
 
