@@ -17,15 +17,14 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests beautifulsoup4
+      # Полное удаление старого багнутого файла из временной папки сборщика перед созданием нового
+      - name: Wipe old scripts
+        run: rm -f bandcamp.py skaner.py
 
-      # ЭТОТ ШАГ САМ СОЗДАСТ КРИСТАЛЬНО ЧИСТЫЙ БЕЗБАГОВЫЙ КОД BANDCAMP.PY
+      # Создаем абсолютно новый файл под новым именем skaner.py
       - name: Create Python Script
         run: |
-          cat << 'EOF' > bandcamp.py
+          cat << 'EOF' > skaner.py
           import os
           import json
           from datetime import datetime
@@ -120,5 +119,5 @@ jobs:
       - name: Run Bandcamp Parser
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-        run: python bandcamp.py
+        run: python skaner.py
         
