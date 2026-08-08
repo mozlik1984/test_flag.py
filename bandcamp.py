@@ -1,22 +1,24 @@
 import os
-import urllib.parse
 from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
 
-# ASCII маскировка путей
+# ASCII маскировка путей для Telegram
 C = chr(58)
 S = chr(47)
-
-# Поисковый шлюз DuckDuckGo (HTML-версия без JS)
-BASE_DDG = f"https{C}{S}{S}://duckduckgo.com{S}html{S}"
 BASE_TG = f"https{C}{S}{S}api.telegram.org{S}bot"
 
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_CHAT_ID = "5002053185"
 
-# Для отладки берем одну сочную поисковую фразу
-QUERIES = ['site:bandcamp.com "black metal" "album" "2026"']
+# Прямая ссылка без капризной ASCII сборки — DuckDuckGo Гитхаб не блокирует!
+BASE_DDG = "https://duckduckgo.com"
+
+QUERIES = [
+    'site:bandcamp.com "black metal" "album" "2026"',
+    'site:bandcamp.com "atmospheric black metal" "2026"'
+]
+
 FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk"]
 
 COUNTRY_FLAGS = {
@@ -35,7 +37,6 @@ def parse_bandcamp_via_search_index():
     found_releases = []
     seen_identities = set()
 
-    # Карта отладки для вывода в Telegram
     debug_log = {
         "status_code": 0,
         "total_results_found": 0,
@@ -58,13 +59,10 @@ def parse_bandcamp_via_search_index():
                 continue
                 
             soup = BeautifulSoup(res.text, "html.parser")
-            
-            # Ищем ссылки и заголовки в верстке DuckDuckGo
-            results = soup.find_all("div", class_="result__body") or soup.find_all("tr") or soup.find_all("a", class_="result__url")
+            results = soup.find_all("div", class_="result__body")
             
             for item in results:
-                # Проверяем, куда именно поисковик упаковал ссылку на текущей верстке
-                title_tag = item if item.name == "a" else (item.find("a", class_="result__url") or item.find("a"))
+                title_tag = item.find("a", class_="result__url")
                 if not title_tag:
                     continue
                     
@@ -74,14 +72,13 @@ def parse_bandcamp_via_search_index():
                     
                 debug_log["total_results_found"] += 1
                 
-                # Сохраняем примеры заголовков из индекса для анализа
                 if len(debug_log["raw_titles_sample"]) < 3:
                     debug_log["raw_titles_sample"].append(raw_title)
 
-                snippet_tag = item.find("a", class_="result__snippet") if item.name != "a" else None
+                snippet_tag = item.find("a", class_="result__snippet")
                 snippet_text = snippet_tag.text.strip().lower() if snippet_tag else ""
                 
-                # ИСПРАВЛЕНО: Безопасный разбор строк без падения цикла
+                # Безопасный разбор строк без падения цикла
                 if " | " in raw_title:
                     parts = raw_title.split(" | ")
                     title = parts[0].strip()
@@ -94,7 +91,6 @@ def parse_bandcamp_via_search_index():
                     title = raw_title
                     artist = "Underground Artist"
 
-                # Фильтрация (проверяем заголовок на трэш/дез/электронику)
                 full_desc = f"{title} {artist} {snippet_text}".lower()
                 if any(forbidden in full_desc for forbidden in FORBIDDEN_KEYWORDS):
                     debug_log["skipped_by_filters"] += 1
@@ -104,18 +100,15 @@ def parse_bandcamp_via_search_index():
                 if full_identity in seen_identities:
                     continue
 
-                # Подбираем флаг по контексту описания
                 flag = "🇳🇴"
                 for c_key, c_flag in COUNTRY_FLAGS.items():
                     if c_key in full_desc:
                         flag = c_flag
                         break
 
-                # Ссылка на YouTube по твоему шаблону
                 youtube_query = f"{artist} {title}".replace(" ", "+")
                 youtube_link = f"://youtube.com{S}results?search_query={youtube_query}"
 
-                # Форматируем поджанр
                 genre_text = "Black Metal"
                 if "atmospheric" in full_desc:
                     genre_text = "Atmospheric Black Metal"
@@ -142,7 +135,6 @@ def parse_bandcamp_via_search_index():
 def send_to_telegram(releases, debug_log):
     samples_str = ", ".join([f"'{t}'" for t in debug_log["raw_titles_sample"]])
     
-    # Сборка обязательного диагностического лога
     msg = f"<b>🔎 ЛОГ ИНДЕКСА ПОИСКОВИКА (БЕЗ БЛОКИРОВОК)</b>\n\n"
     msg += f"<b>📊 Статистика разбора:</b>\n"
     msg += f"• Код ответа DuckDuckGo: <code>{debug_log['status_code']}</code>\n"
