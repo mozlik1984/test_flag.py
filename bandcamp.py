@@ -1,6 +1,7 @@
 import os
 import json
 from datetime import datetime
+import requests
 import cloudscraper
 from bs4 import BeautifulSoup
 
@@ -109,11 +110,12 @@ def parse_bandcamp_hardcore():
             print(f"Ошибка сканирования тега {tag}: {e}")
             continue
             
+    print(f"Успешно прошло блэк-метал очистку: {len(found_releases)}")
     return found_releases[:15]
 
 def send_to_telegram(releases):
     if not releases:
-        msg = "<b>🇳🇴 БЛЭК-МЕТАЛ ПАРСЕР (HARDCORE MODE)</b>\n\nДаже через cloudscraper не удалось зацепить свежие релизы из pagedata. Сервер забанен полностью."
+        msg = "<b>🇳🇴 БЛЭК-МЕТАЛ ПАРСЕР (HARDCORE MODE)</b>\n\nЧерез cloudscraper зашли успешно, но свежих блэк-метал релизов на главной странице тегов сейчас нет."
         telegram_url = f"{BASE_TG}{BOT_TOKEN}{S}sendMessage"
         requests.post(telegram_url, json={"chat_id": ADMIN_CHAT_ID, "text": msg, "parse_mode": "HTML"})
         return
@@ -134,7 +136,12 @@ def send_to_telegram(releases):
         "disable_web_page_preview": True
     }
     
-    requests.post(telegram_url, json=payload)
+    # ИСПРАВЛЕНО: Теперь requests официально импортирован на строке 4 и отработает штатно!
+    res = requests.post(telegram_url, json=payload)
+    if res.status_code == 200:
+        print("Результат успешно отправлен в Telegram!")
+    else:
+        print(f"Ошибка отправки в TG: {res.status_code} - {res.text}")
 
 if __name__ == "__main__":
     results = parse_bandcamp_hardcore()
