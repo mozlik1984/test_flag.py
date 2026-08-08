@@ -1,5 +1,4 @@
 import os
-import json
 from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
@@ -19,25 +18,16 @@ BLACK_METAL_TAGS = [
     "melodic-black-metal", "blackgaze"
 ]
 
-FORBIDDEN_TAGS = ["thrash-metal", "death-metal", "heavy-metal", "power-metal", "metalcore"]
-
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept-Language": "en-US,en;q=0.9"
 }
 
-def parse_bandcamp_debug():
-    now = datetime.now()
+def parse_bandcamp_html():
     found_releases = []
     seen_urls = set()
     
-    # Словари для детальной отладки в Telegram
-    debug_log = {
-        "total_raw_items": 0,
-        "skipped_by_forbidden_tags": 0,
-        "skipped_by_date_mismatch": 0,
-        "date_parse_errors": 0,
-        "sample_dates": [] # Сюда сохраним примеры дат с сайта
-    }
+    total_parsed_html_items = 0
 
     for tag in BLACK_METAL_TAGS:
         url = f"{BASE_BC}{tag}"
@@ -47,97 +37,91 @@ def parse_bandcamp_debug():
                 continue
                 
             soup = BeautifulSoup(res.text, "html.parser")
-            pagedata_tag = soup.find("div", id="pagedata") or soup.find("script", {"id": "pagedata"})
-            if not pagedata_tag:
-                continue
-                
-            data = json.loads(pagedata_tag.get("data-blob") or pagedata_tag.text)
-            dig_deeper = data.get("hub_data", {}).get("tabs", {}).get("dig_deeper", {}).get("initial_results", [])
             
-            for item in dig_deeper:
-                debug_log["total_raw_items"] += 1
-                album_url = item.get("tralbum_url")
-                if not album_url or album_url in seen_urls:
+            # Находим карточки альбомов прямо в HTML-верстке страницы
+            items = soup.find_all("li", class_="item") or soup.find_all("div", class_="item")
+            if not items:
+                # Альтернативный поиск по сетке dig deeper
+                items = soup.select(".dig-deeper-results .item") or soup.select(".item")
+
+            for item in items:
+                total_parsed_html_items += 1
+                
+                # Извлекаем ссылку на альбом
+                link_tag = item.find("a", href=True)
+                if not link_tag:
                     continue
+                album_url = link_tag["href"]
+                
+                # Если ссылка относительная — дописываем базовый домен
+                if album_url.startswith("/"):
+                    album_url = f"https{C}{S}{S}bandcamp.com{album_url}"
                     
-                item_tags = [t.lower() for t in item.get("tags", [])]
-                if any(forbidden in item_tags for forbidden in FORBIDDEN_TAGS):
-                    debug_log["skipped_by_forbidden_tags"] += 1
+                if album_url in seen_urls:
                     continue
+
+                # Извлекаем название альбома и группу
+                title_tag = item.find(class_="title") or item.find(class_="album")
+                artist_tag = item.find(class_="artist") or item.find(class_="band")
                 
+                # Извлекаем обложку альбома
+                img_tag = item.find("img", src=True)
+                image_url = ""
+                if img_tag:
+                    image_url = img_tag.get("data-original") or img_tag["src"]
+
+                title = title_tag.text.strip() if title_tag else "Unknown Album"
+                artist = artist_tag.text.strip() if artist_tag else "Unknown Artist"
+                
+                # Очищаем ссылку от мусора
                 clean_url = album_url.split('?')[0] if '?' in album_url else album_url
-                rel_date_str = item.get("release_date")
-                
-                if rel_date_str:
-                    # Сохраняем примеры оригинальных строк дат для анализа
-                    if len(debug_log["sample_dates"]) < 5 and rel_date_str not in debug_log["sample_dates"]:
-                        debug_log["sample_dates"].append(rel_date_str)
-                        
-                    try:
-                        # Пытаемся распарсить дату ("05 Aug 2026")
-                        rel_date = datetime.strptime(rel_date_str, "%d %b %Y")
-                        if rel_date.month == now.month and rel_date.year == now.year:
-                            found_releases.append({
-                                "artist": item.get("artist"),
-                                "title": item.get("title"),
-                                "url": clean_url
-                            })
-                            seen_urls.add(album_url)
-                        else:
-                            debug_log["skipped_by_date_mismatch"] += 1
-                    except Exception:
-                        debug_log["date_parse_errors"] += 1
-                        # В случае ошибки парсинга — временно забираем в улов, чтобы не потерять
-                        found_releases.append({
-                            "artist": item.get("artist"),
-                            "title": item.get("title") + " (⚠️ Дата не распознана)",
-                            "url": clean_url
-                        })
-                        seen_urls.add(album_url)
+
+                found_releases.append({
+                    "artist": artist,
+                    "title": title,
+                    "url": clean_url,
+                    "image": image_url
+                })
+                seen_urls.add(album_url)
 
         except Exception as e:
-            print(f"Ошибка тега {tag}: {e}")
+            print(f"Ошибка парсинга HTML для тега {tag}: {e}")
             continue
             
-    return found_releases[:15], debug_log
+    print(f"Парсер зафиксировал элементов в верстке: {total_parsed_html_items}")
+    print(f"Успешно извлечено чистых релизов: {len(found_releases)}")
+    return found_releases[:10], total_parsed_html_items
 
-def send_to_telegram(releases, debug_log):
+def send_to_telegram(releases, total_raw):
     months_ru = {1:"Январь", 2:"Февраль", 3:"Март", 4:"Апрель", 5:"Май", 6:"Июнь", 7:"Июль", 8:"Август", 9:"Сентябрь", 10:"Октябрь", 11:"Ноябрь", 12:"Декабрь"}
     now = datetime.now()
     
-    # Формируем блок диагностики
-    dates_str = ", ".join([f"'{d}'" for d in debug_log["sample_dates"]])
-    
-    msg = f"<b>🇳🇴 БЛЭК-МЕТАЛ УЛОВ И ОТЛАДКА</b>\n"
-    msg += f"Период фильтра: <code>{months_ru[now.month]} {now.year}</code>\n\n"
-    msg += f"<b>📊 Статистика этапов:</b>\n"
-    msg += f"• Всего релизов найдено в API: <code>{debug_log['total_raw_items']}</code>\n"
-    msg += f"• Отсеяно по запрещенным тегам: <code>{debug_log['skipped_by_forbidden_tags']}</code>\n"
-    msg += f"• Не подошли по месяцу/году: <code>{debug_log['skipped_by_date_mismatch']}</code>\n"
-    msg += f"• Ошибок распознавания даты: <code>{debug_log['date_parse_errors']}</code>\n"
-    msg += f"• Примеры дат с сайта: <code>[{dates_str}]</code>\n\n"
-    
     if not releases:
-        msg += "❌ <b>Результат:</b> Подходящих релизов не найдено."
-    else:
-        msg += "🔥 <b>Найденные релизы:</b>\n\n"
-        for r in releases:
-            msg += f"• <code>{r['artist']} - {r['title']}</code>\n🔗 {r['url']}\n\n"
-
-    if not BOT_TOKEN:
+        msg = f"<b>🇳🇴 БЛЭК-МЕТАЛ ПАРСЕР (ВЕРСТКА)</b>\n\n"
+        msg += f"Сканирование завершено. В HTML коде найдено блоков: <code>{total_raw}</code>.\n"
+        msg += "Но карточки релизов вытащить не удалось. Защита Bandcamp."
+        
+        telegram_url = f"{BASE_TG}{BOT_TOKEN}{S}sendMessage"
+        payload = {"chat_id": ADMIN_CHAT_ID, "text": msg, "parse_mode": "HTML"}
+        requests.post(telegram_url, json=payload)
         return
+
+    # Если релизы найдены — отправляем их красивым списком
+    msg = f"<b>🇳🇴 БЛЭК-МЕТАЛ УЛОВ ({months_ru[now.month]} {now.year})</b>\n\n"
+    for r in releases:
+        msg += f"• <code>{r['artist']} - {r['title']}</code>\n🔗 {r['url']}\n\n"
 
     telegram_url = f"{BASE_TG}{BOT_TOKEN}{S}sendMessage"
     payload = {
         "chat_id": ADMIN_CHAT_ID,
         "text": msg,
         "parse_mode": "HTML",
-        "disable_web_page_preview": True
+        "disable_web_page_preview": False  # Разрешаем Телеграму подтянуть превью первой ссылки
     }
     
     requests.post(telegram_url, json=payload)
 
 if __name__ == "__main__":
-    results, log_data = parse_bandcamp_debug()
-    send_to_telegram(results, log_data)
+    results, raw_count = parse_bandcamp_html()
+    send_to_telegram(results, raw_count)
     
