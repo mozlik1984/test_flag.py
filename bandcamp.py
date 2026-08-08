@@ -16,13 +16,11 @@ BASE_TG = f"https{C}{S}{S}api.telegram.org{S}bot"
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_CHAT_ID = "5002053185"
 
-BLACK_METAL_TAGS = [
-    "black-metal", "atmospheric-black-metal", "depressive-black-metal", 
-    "raw-black-metal", "symphonic-black-metal", "post-black-metal", 
-    "melodic-black-metal", "blackgaze"
-]
+# ВРЕМЕННО: Оставляем только один самый гигантский тег для теста пробива
+TEST_TAGS = ["metal"]
 
-FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk"]
+# ВРЕМЕННО ОТКЛЮЧЕНО: Пропускаем абсолютно любые жанры ради теста!
+FORBIDDEN_KEYWORDS = []
 
 # Словарь для автоматической расстановки флагов стран по локации группы
 COUNTRY_FLAGS = {
@@ -45,10 +43,10 @@ def parse_bandcamp_hardcore():
     # Создаем умный сканер Cloudflare, который прикидывается браузером Chrome на Windows
     scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False})
 
-    for tag in BLACK_METAL_TAGS:
+    for tag in TEST_TAGS:
         url = f"{BASE_BC}{tag}"
         try:
-            # Стучимся напрямую на Bandcamp сквозь Cloudflare защита
+            # Стучимся напрямую на Bandcamp сквозь Cloudflare
             res = scraper.get(url, timeout=25)
             if res.status_code != 200:
                 print(f"Защита не пробита для тега {tag}: статус {res.status_code}")
@@ -57,14 +55,18 @@ def parse_bandcamp_hardcore():
             soup = BeautifulSoup(res.text, "html.parser")
             pagedata_tag = soup.find("div", id="pagedata") or soup.find("script", {"id": "pagedata"})
             if not pagedata_tag:
+                print("КРИТИЧЕСКИЙ СБОЙ: Тег pagedata не найден на странице!")
                 continue
                 
             raw_blob = pagedata_tag.get("data-blob") or pagedata_tag.text
             if not raw_blob:
+                print("КРИТИЧЕСКИЙ СБОЙ: data-blob оказался пустым!")
                 continue
                 
             data = json.loads(raw_blob)
             dig_deeper = data.get("hub_data", {}).get("tabs", {}).get("dig_deeper", {}).get("initial_results", [])
+            
+            print(f"Парсер извлек сырых элементов из тега {tag}: {len(dig_deeper)}")
             
             for item in dig_deeper:
                 album_url = item.get("tralbum_url")
@@ -74,18 +76,12 @@ def parse_bandcamp_hardcore():
                 title = item.get("title", "Unknown Album").strip()
                 artist = item.get("artist", "Unknown Artist").strip()
                 
-                # Полное описание жанров релиза для жесткого отсева
-                item_tags = [t.lower() for t in item.get("tags", [])]
+                # Собираем жанровое описание
                 genre_text = item.get("genre") or tag.replace("-", " ").title()
                 
-                # Проверяем, чтобы в тегах и названии не было трэша/дэта/панка
-                full_desc_lower = f"{title} {artist} {' '.join(item_tags)}".lower()
-                if any(forbidden in full_desc_lower for forbidden in FORBIDDEN_KEYWORDS):
-                    continue
-                
-                # Определяем страну для эмодзи-флага
+                # Временный тестовый прогон: берем всё без фильтрации!
                 location = item.get("artist_location", "").lower()
-                flag = "🇳🇴" # Тру-дефолт флаг по умолчанию
+                flag = "🏴‍☠️"  # Тестовый пиратский флаг, если локация не определена
                 for c_key, c_flag in COUNTRY_FLAGS.items():
                     if c_key in location:
                         flag = c_flag
@@ -110,12 +106,12 @@ def parse_bandcamp_hardcore():
             print(f"Ошибка сканирования тега {tag}: {e}")
             continue
             
-    print(f"Успешно прошло блэк-метал очистку: {len(found_releases)}")
+    print(f"Успешно прошло тестовую выгрузку: {len(found_releases)}")
     return found_releases[:15]
 
 def send_to_telegram(releases):
     if not releases:
-        msg = "<b>🇳🇴 БЛЭК-МЕТАЛ ПАРСЕР (HARDCORE MODE)</b>\n\nЧерез cloudscraper зашли успешно, но свежих блэк-метал релизов на главной странице тегов сейчас нет."
+        msg = "<b>⚠️ ТЕСТОВЫЙ ПАРСЕР (ЖАНР METAL)</b>\n\nДаже по общему тегу 'metal' пустая выдача. Защита Cloudflare полностью заблокировала структуру pagedata."
         telegram_url = f"{BASE_TG}{BOT_TOKEN}{S}sendMessage"
         requests.post(telegram_url, json={"chat_id": ADMIN_CHAT_ID, "text": msg, "parse_mode": "HTML"})
         return
@@ -126,7 +122,7 @@ def send_to_telegram(releases):
         msg += f"<code>{r['artist']} - {r['title']} ({r['year']})</code>\n"
         msg += f"{r['flag']} {r['genre']}\n"
         msg += f"{r['youtube']} {r['month']}\n"
-        msg += "---\n"  # Твой разделитель между релизами
+        msg += "---\n"
 
     telegram_url = f"{BASE_TG}{BOT_TOKEN}{S}sendMessage"
     payload = {
@@ -136,7 +132,6 @@ def send_to_telegram(releases):
         "disable_web_page_preview": True
     }
     
-    # ИСПРАВЛЕНО: Теперь requests официально импортирован на строке 4 и отработает штатно!
     res = requests.post(telegram_url, json=payload)
     if res.status_code == 200:
         print("Результат успешно отправлен в Telegram!")
