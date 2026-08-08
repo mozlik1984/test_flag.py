@@ -20,60 +20,59 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4 curl_cffi typing_extensions
 
-      # ШАГ 8.5: Ищем точные текстовые маркеры музыкальной сетки внутри HTML страницы
+      # ШАГ 9: Сканируем data-blob страницы Daily на наличие скрытых музыкальных ссылок
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
           import re
+          import html
           from curl_cffi import requests as cloud_requests
 
-          URL_TAG = "https://bandcamp.com"
+          # Тот самый рабочий адрес, который отдал нам вчерашний сборник Essential Releases
+          URL_DAILY = "https://bandcamp.com"
           HEADERS = {
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 8.5 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 9 ---")
           try:
-              res = cloud_requests.get(URL_TAG, headers=HEADERS, impersonate="chrome110", timeout=20)
-              print(f"1. Код ответа Bandcamp: {res.status_code}")
-              print(f"2. Количество символов на странице: {len(res.text)}")
+              res = cloud_requests.get(URL_DAILY, headers=HEADERS, impersonate="chrome110", timeout=20)
+              print(f"1. Код ответа сервера: {res.status_code}")
+              print(f"2. Количество символов на Daily-странице: {len(res.text)}")
               
               if res.status_code == 200 and len(res.text) > 1000:
-                  html = res.text
+                  html_content = res.text
+                  marker = 'data-blob="'
                   
-                  # Проверяем маркер 1: data-initial-items
-                  if "data-initial-items" in html:
-                      print("3. НАЙДЕН МАРКЕР: data-initial-items присутствует в HTML!")
-                      idx = html.find("data-initial-items")
-                      print(f"   -> Срез кода вокруг маркера: {html[idx:idx+150]}")
-                  
-                  # Проверяем маркер 2: data-items
-                  if "data-items" in html:
-                      print("4. НАЙДЕН МАРКЕР: data-items присутствует в HTML!")
-                      idx = html.find("data-items")
-                      print(f"   -> Срез кода вокруг маркера: {html[idx:idx+150]}")
+                  if marker in html_content:
+                      start_idx = html_content.find(marker) + len(marker)
+                      end_idx = html_content.find('"', start_idx)
                       
-                  # Проверяем маркер 3: id="music-grid" или классы сеток
-                  if "music-grid" in html or "dig-deeper" in html:
-                      print("5. НАЙДЕНЫ СИСТЕМНЫЕ КЛАССЫ СЕТОК (music-grid/dig-deeper)!")
+                      raw_blob = html_content[start_idx:end_idx]
+                      # Очищаем зашифрованные HTML-кавычки
+                      clean_blob = html.unescape(raw_blob)
+                      print("3. УСПЕХ: data-blob Daily-страницы успешно извлечен и очищен!")
                       
-                  # Проверим сколько раз вообще в коде страницы встречается слово "album/" в ссылках
-                  album_matches = len(re.findall(r'href="[^"]*/album/[^"]*"', html))
-                  print(f"6. Всего прямых ссылок на альбомы в коде страницы: {album_matches}")
-                  
-                  if album_matches > 0:
-                      print("\n7. Примеры первых 3 найденных ссылок на альбомы:")
-                      links = re.findall(r'href="([^"]*/album/[^"]*)"', html)
-                      for l in links[:3]:
-                          print(f"   -> Ссылка: {l}")
+                      # Считаем, сколько раз слово "album" или ссылки встречаются внутри этого блока данных
+                      album_count = clean_blob.count("album")
+                      url_count = clean_blob.count("url")
+                      print(f"4. Вхождений маркера 'album' внутри блока: {album_count}")
+                      print(f"5. Вхождений маркера 'url' внутри блока: {url_count}")
+                      
+                      # Выведем небольшой кусочек текста вокруг слова "album", чтобы увидеть структуру
+                      if album_count > 0:
+                          idx = clean_blob.find("album")
+                          print(f"\n6. Срез структуры вокруг найденной музыки:\n{clean_blob[idx-50:idx+250]}")
+                  else:
+                      print("3. СБОЙ: Маркер data-blob не найден в HTML коде Daily.")
               else:
-                  print("3. СБОЙ: Страница пуста.")
+                  print("3. СБОЙ: Сервер вернул пустой ответ.")
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 8.5: {e}")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 9: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем поиск маркеров сетки
+      # Запускаем поиск скрытой музыки в Daily
       - name: Run Token API Test
         run: python test_metal.py
         
