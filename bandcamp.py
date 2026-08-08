@@ -7,19 +7,17 @@ import requests
 C = chr(58)
 S = chr(47)
 
-# Официальный внутренний JSON шлюз Bandcamp без защиты Cloudflare
-BASE_API = f"https{C}{S}{S}bandcamp.com{S}api{S}fancast{S}1{S}collection_items"
+# Официальный мобильный поисковый JSON-шлюз Bandcamp
+BASE_API = f"https{C}{S}{S}bandcamp.com{S}api{S}bcsearch{S}1{S}autocomplete"
 BASE_TG = f"https{C}{S}{S}api.telegram.org{S}bot"
 
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_CHAT_ID = "5002053185"
 
-BLACK_METAL_TAGS = [
-    "black-metal", "atmospheric-black-metal", "depressive-black-metal", 
-    "raw-black-metal", "symphonic-black-metal", "post-black-metal", 
-    "melodic-black-metal", "blackgaze"
-]
+# Ключевые поисковые запросы для мобильного шлюза
+QUERIES = ["black metal album", "atmospheric black metal", "depressive black metal"]
 
+# Исключаем лишние жанры
 FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk"]
 
 COUNTRY_FLAGS = {
@@ -34,53 +32,53 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
-def parse_bandcamp_collection_api():
+def parse_bandcamp_mobile_search():
     now = datetime.now()
     found_releases = []
-    seen_ids = set()
+    seen_urls = set()
 
     months_en = {1:"JAN", 2:"FEB", 3:"MAR", 4:"APR", 5:"MAY", 6:"JUN", 7:"JUL", 8:"AUG", 9:"SEP", 10:"OCT", 11:"NOV", 12:"DEC"}
     month_tag = months_en[now.month]
     current_year = str(now.year)
 
-    for tag in BLACK_METAL_TAGS:
-        # Формируем легальный запрос к API коллекций по тегу
-        payload = {
-            "fan_id": 1,
-            "older_than_token": "9999999999:9999999999",
-            "count": 20,
-            "tag": tag
-        }
-        
+    for q in QUERIES:
+        params = {"q": q}
         try:
-            res = requests.post(BASE_API, json=payload, headers=HEADERS, timeout=15)
+            # Мобильное API принимает обычные GET-запросы с поисковой строкой
+            res = requests.get(BASE_API, params=params, headers=HEADERS, timeout=15)
             if res.status_code != 200:
                 continue
                 
             data = res.json()
-            # В этом API альбомы лежат внутри ключа 'items'
-            items = data.get("items", [])
+            # В автодополнении результаты лежат в ключе 'auto'
+            items = data.get("auto", [])
             
             for item in items:
-                # Нам нужны только альбомы
-                if item.get("item_type") != "album":
+                # Извлекаем ссылку на альбом
+                album_url = item.get("url", "")
+                if not album_url or album_url in seen_urls:
                     continue
                     
-                item_id = item.get("item_id")
-                if not item_id or item_id in seen_ids:
-                    continue
+                # В мобильной поисковой выдаче имя пишется в поле 'name' в формате "Band Name - Album Name"
+                name_raw = item.get("name", "")
+                if " - " in name_raw:
+                    artist, title = name_raw.split(" - ", 1)
+                else:
+                    artist = name_raw
+                    title = "Release"
                     
-                title = item.get("item_title", "Unknown Album").strip()
-                artist = item.get("band_name", "Unknown Artist").strip()
+                # Очищаем от лишних пробелов
+                artist = artist.strip()
+                title = title.strip()
                 
-                # Собираем текстовое описание для блэк-метал фильтрации
-                full_desc = f"{title} {artist} {tag}".lower()
+                # Фильтрация поджанров (проверяем всю карточку релиза)
+                full_desc = f"{artist} {title} {q}".lower()
                 if any(forbidden in full_desc for forbidden in FORBIDDEN_KEYWORDS):
                     continue
                     
-                # Ищем страну для флага
-                location = item.get("location", "").lower()
-                flag = "🇳🇴" # Тру-дефолт флаг
+                # Определяем страну для флага по строке локации
+                location = item.get("stat", "").lower()
+                flag = "🇳🇴"  # Тру-дефолт флаг
                 for c_key, c_flag in COUNTRY_FLAGS.items():
                     if c_key in location:
                         flag = c_flag
@@ -90,8 +88,10 @@ def parse_bandcamp_collection_api():
                 youtube_query = f"{artist} {title}".replace(" ", "+")
                 youtube_link = f"://youtube.com{S}results?search_query={youtube_query}"
 
-                # Форматируем название жанра красиво
-                genre_text = tag.replace("-", " ").title()
+                # Форматируем красивое описание жанра
+                genre_text = item.get("stat", "Atmospheric Black Metal").strip()
+                if not genre_text or len(genre_text) < 3:
+                    genre_text = "Black Metal"
 
                 found_releases.append({
                     "artist": artist,
@@ -102,17 +102,17 @@ def parse_bandcamp_collection_api():
                     "youtube": youtube_link,
                     "month": month_tag
                 })
-                seen_ids.add(item_id)
+                seen_urls.add(album_url)
 
         except Exception as e:
-            print(f"Ошибка шлюза коллекций для тега {tag}: {e}")
+            print(f"Ошибка мобильного поиска для запроса {q}: {e}")
             continue
 
     return found_releases[:15]
 
 def send_to_telegram(releases):
     if not releases:
-        msg = "<b>🇳🇴 БЛЭК-МЕТАЛ ПАРСЕР (COLLECTION API)</b>\n\nШлюз API открылся успешно, но чистых блэк-метал релизов по критериям не обнаружено."
+        msg = "<b>🇳🇴 БЛЭК-МЕТАЛ ПАРСЕР (MOBILE SEARCH API)</b>\n\nМобильный поисковый шлюз ответил успешно, но чистых блэк-метал релизов по критериям не обнаружено."
         telegram_url = f"{BASE_TG}{BOT_TOKEN}{S}sendMessage"
         requests.post(telegram_url, json={"chat_id": ADMIN_CHAT_ID, "text": msg, "parse_mode": "HTML"})
         return
@@ -136,6 +136,6 @@ def send_to_telegram(releases):
     requests.post(telegram_url, json=payload)
 
 if __name__ == "__main__":
-    results = parse_bandcamp_collection_api()
+    results = parse_bandcamp_mobile_search()
     send_to_telegram(results)
     
