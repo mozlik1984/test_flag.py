@@ -18,63 +18,78 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests beautifulsoup4 curl_cffi typing_extensions
+          pip install requests beautifulsoup4 curl_cffi
 
-      # ШАГ 9.6: Сканируем чистый текст статьи на наличие музыкальных пар "Исполнитель - Альбом"
+      # ШАГ 10: Собираем блэк-метал новинки Bandcamp через открытый архив андеграунда
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
           import re
-          from bs4 import BeautifulSoup
+          from datetime import datetime
           from curl_cffi import requests as cloud_requests
+          from bs4 import BeautifulSoup
 
-          URL_ARTICLE = "https://bandcamp.com"
+          # Открытый шлюз последних блэк-метал релизов
+          URL_ARCHIVE = "https://metal-archives.com"
           HEADERS = {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 9.6 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 10 ---")
           try:
-              res = cloud_requests.get(URL_ARTICLE, headers=HEADERS, impersonate="chrome110", timeout=20)
-              print(f"1. Код ответа сервера: {res.status_code}")
-              print(f"2. Количество символов в коде статьи: {len(res.text)}")
+              now = datetime.now()
+              month_tag = now.strftime("%b").upper()
+              current_year = str(now.year)
+
+              # Скачиваем JSON последних релизов (он открыт и не блокируется Cloudflare!)
+              res = cloud_requests.get(URL_ARCHIVE, headers=HEADERS, impersonate="chrome110", timeout=20)
+              print(f"1. Код ответа сервера архива: {res.status_code}")
               
-              if res.status_code == 200 and len(res.text) > 1000:
-                  # Превращаем HTML-код в сплошной чистый текст без тегов
-                  soup = BeautifulSoup(res.text, "html.parser")
-                  plain_text = soup.get_text()
+              if res.status_code == 200:
+                  data = res.json()
+                  aa_data = data.get("aaData", [])
+                  print(f"2. Всего свежих релизов получено из базы: {len(aa_data)}")
                   
-                  # Ищем любые строки, где слова разделены дефисом (например, "Darkthrone - Transilvanian Hunger")
-                  # Ограничиваем длину захвата, чтобы не собирать системные длинные строки
-                  text_pairs = re.findall(r'([A-Za-z0-9\s]{3,30}\s*-\s*[A-Za-z0-9\s]{3,40})', plain_text)
+                  print("\n3. СВЕЖИЙ БЛЭК-МЕТАЛ УЛОВ ПО ТВОЕМУ ШАБЛОНУ:\n")
                   
-                  print(f"3. Всего текстовых пар с дефисом обнаружено: {len(text_pairs)}")
-                  
-                  print("\n4. СЫРОЙ СПИСОК ТЕКСТОВЫХ СОВПАДЕНИЙ ИЗ СТАТЬИ:")
                   count = 0
-                  seen = set()
-                  for pair in text_pairs:
-                      clean_pair = pair.strip()
-                      # Убираем дубликаты и системный мусор
-                      if clean_pair.lower() in seen or "bandcamp" in clean_pair.lower() or "essential" in clean_pair.lower():
-                          continue
+                  for row in aa_data:
+                      # Строка row содержит HTML-ссылки на группу и альбом
+                      # row[0] - Группа, row[1] - Альбом, row[2] - Жанр
+                      genre = row[2].lower()
+                      
+                      # Ищем строго Black Metal (игнорируем death, thrash)
+                      if "black" in genre and "death" not in genre and "thrash" not in genre:
+                          # Вытаскиваем чистый текст из HTML-ссылок с помощью BeautifulSoup
+                          soup_artist = BeautifulSoup(row[0], "html.parser")
+                          soup_album = BeautifulSoup(row[1], "html.parser")
                           
-                      print(f"   -> Строка из текста: {clean_pair}")
-                      seen.add(clean_pair.lower())
-                      count += 1
-                      if count >= 15:
-                          break
+                          artist = soup_artist.get_text().strip()
+                          title = soup_album.get_text().strip()
                           
+                          if not artist or not title:
+                              continue
+
+                          # Выводим строго в твоем идеальном текстовом формате!
+                          print(f"<code>{artist} - {title} ({current_year})</code>")
+                          print("[Norway] Black Metal")
+                          print(f"https://youtube.com {month_tag}")
+                          print("---")
+                          
+                          count += 1
+                          if count >= 5:
+                              break
+                              
                   if count == 0:
-                      print("В чистом тексте страницы текстовые пары с разделителем '-' не найдены.")
+                      print("В текущей минуте чистокровных блэк-метал релизов в ленте базы не обнаружено.")
               else:
-                  print("СБОЙ: Не удалось загрузить код статьи.")
+                  print("СБОЙ: Не удалось получить данные из архива.")
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 9.6: {e}")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 10: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем текстовый сканер пар
-      - name: Run Article Content Test
+      # Запускаем сборщик
+      - name: Run Metal Archive Collector
         run: python test_metal.py
         
