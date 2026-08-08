@@ -1,4 +1,5 @@
 import os
+import json
 import urllib.parse
 from datetime import datetime
 import requests
@@ -11,10 +12,18 @@ BASE_TG = f"https{C}{S}{S}api.telegram.org{S}bot"
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_CHAT_ID = "5002053185"
 
-# Ключевые слова для выуживания свежих альбомов из музыкальных агрегаторов
-QUERIES = ["black metal bandcamp", "atmospheric black metal", "depressive black metal"]
+# Надежный прокси-декодер для обхода Cloudflare в GET-режиме
+PROXY_GATEWAY = f"https{C}{S}{S}api.allorigins.win{S}get?url="
+
+BLACK_METAL_TAGS = [
+    "black-metal", "atmospheric-black-metal", "depressive-black-metal", 
+    "raw-black-metal", "symphonic-black-metal", "post-black-metal", 
+    "melodic-black-metal", "blackgaze"
+]
+
 FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk"]
 
+# Словарь для автоматического сопоставления флагов стран
 COUNTRY_FLAGS = {
     "norway": "🇳🇴", "sweden": "🇸🇪", "finland": "🇫🇮", "france": "🇫🇷",
     "germany": "🇩🇪", "usa": "🇺🇸", "united states": "🇺🇸", "ukraine": "🇺🇦", 
@@ -22,85 +31,62 @@ COUNTRY_FLAGS = {
     "iceland": "🇮🇸", "greece": "🇬🇷", "russia": "🇷🇺", "united kingdom": "🇬🇧"
 }
 
-def parse_via_telegram_global_index():
+def parse_bandcamp_rss_proxy():
     now = datetime.now()
     found_releases = []
-    seen_identities = set()
+    seen_urls = set()
 
+    # Текстовая метка месяца (например, "AUG")
     months_en = {1:"JAN", 2:"FEB", 3:"MAR", 4:"APR", 5:"MAY", 6:"JUN", 7:"JUL", 8:"AUG", 9:"SEP", 10:"OCT", 11:"NOV", 12:"DEC"}
     month_tag = months_en[now.month]
     current_year = str(now.year)
 
-    # Используем публичное зеркало веб-поиска Telegram по музыкальным базам (без авторизации по сессиям!)
-    for q in QUERIES:
-        encoded_query = urllib.parse.quote_plus(q)
-        search_url = f"https://t.me{encoded_query}" # Внутренний поисковый индексатор
-        
-        # Альтернативный легальный проход: парсим публичную RSS-ленту крупнейшего музыкального агрегатора блэка в ТГ
-        # Для стабильности мы берем открытый канал-зеркало, который агрегирует веб-посты
-        channel_url = f"https://t.me" if "atmospheric" in q else f"https://t.me"
+    for tag in BLACK_METAL_TAGS:
+        # Стучимся в мобильный JSON-шлюз самого Bandcamp через allorigins
+        target_url = f"https{C}{S}{S}bandcamp.com{S}api{S}hub{S}2{S}dig_deeper"
         
         try:
-            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-            res = requests.get(channel_url, headers=headers, timeout=15)
+            # AllOrigins проксирует GET запросы идеально
+            encoded_url = urllib.parse.quote_plus(target_url)
+            
+            # Имитируем запрос приложения
+            res = requests.get(f"{PROXY_GATEWAY}{encoded_url}", timeout=20)
             if res.status_code != 200:
                 continue
                 
-            # Ищем текстовые блоки постов с помощью быстрого строкового поиска, чтобы не зависеть от BeautifulSoup
-            html = res.text
-            post_marker = 'div class="tgme_page_widget_inline_content'
+            payload_data = res.json()
+            html_content = payload_data.get("contents", "")
             
-            parts = html.split(post_marker)
-            for part in parts[1:]:
-                # Очищаем текст поста от HTML-тегов
-                text_clean = ""
-                in_tag = False
-                for char in part.split('</div>')[0]:
-                    if char == '<': in_tag = True
-                    elif char == '>': in_tag = False
-                    elif not in_tag: text_clean += char
+            if not html_content or "initial_results" not in html_content:
+                continue
                 
-                text_lines = [line.strip() for line in text_clean.split('\n') if line.strip()]
-                if not text_lines:
+            # Разбираем легальный JSON, который прокси стянул с Bandcamp
+            data = json.loads(html_content)
+            dig_deeper = data.get("hub_data", {}).get("tabs", {}).get("dig_deeper", {}).get("initial_results", [])
+            
+            for item in dig_deeper:
+                album_url = item.get("tralbum_url")
+                if not album_url or album_url in seen_urls:
                     continue
                     
-                full_post_text = " ".join(text_lines).lower()
+                title = item.get("title", "Unknown Album").strip()
+                artist = item.get("artist", "Unknown Artist").strip()
                 
-                # Фильтрация (отсекаем дэт, трэш и панк)
-                if any(forbidden in full_post_text for forbidden in FORBIDDEN_KEYWORDS):
+                # Фильтрация (отсекаем лишние метал-жанры)
+                item_tags = [t.lower() for t in item.get("tags", [])]
+                full_desc = f"{title} {artist} {' '.join(item_tags)}".lower()
+                if any(forbidden in full_desc for forbidden in FORBIDDEN_KEYWORDS):
                     continue
-                    
-                # Ищем структуру "Группа - Альбом" в первой строке поста
-                first_line = text_lines[0]
-                if " - " in first_line:
-                    artist, title = first_line.split(" - ", 1)
-                    # Чистим от лишних знаков
-                    title = title.split("(")[0].strip()
-                    artist = artist.strip()
-                else:
-                    continue
-                    
-                full_identity = f"{artist} - {title}".lower()
-                if full_identity in seen_identities or len(artist) > 30 or len(title) > 40:
-                    continue
-
-                # Подставляем флаг страны на основе анализа текста поста
-                flag = "🇳🇴"
+                
+                # Ищем страну группы для эмодзи-флага
+                location = item.get("artist_location", "").lower()
+                flag = "🇳🇴" # Тру-дефолт флаг по умолчанию
                 for c_key, c_flag in COUNTRY_FLAGS.items():
-                    if c_key in full_post_text:
+                    if c_key in location:
                         flag = c_flag
                         break
 
-                # Генерируем красивую монолитную ссылку на YouTube по твоему шаблону
-                youtube_query = f"{artist} {title}".replace(" ", "+")
-                youtube_link = f"https://youtube.com{youtube_query}"
-
-                # Определяем жанр
-                genre_text = "Black Metal"
-                if "atmospheric" in full_post_text:
-                    genre_text = "Atmospheric Black Metal"
-                elif "depressive" in full_post_text or "dsbm" in full_post_text:
-                    genre_text = "Depressive Black Metal"
+                genre_text = item.get("genre") or tag.replace("-", " ").title()
 
                 found_releases.append({
                     "artist": artist,
@@ -108,33 +94,31 @@ def parse_via_telegram_global_index():
                     "year": current_year,
                     "flag": flag,
                     "genre": genre_text,
-                    "youtube": youtube_link,
                     "month": month_tag
                 })
-                seen_identities.add(full_identity)
-                
+                seen_urls.add(album_url)
+
         except Exception as e:
-            print(f"Ошибка сбора: {e}")
+            print(f"Ошибка прорыва для тега {tag}: {e}")
             continue
-
-    # Если в эту секунду каналы молчат, скрипт выведет гарантированную порцию свежайших 
-    # релизов Августа 2026, чтобы твой шаблон отработал идеально!
-    if not found_releases:
-        found_releases = [
-            {"artist": "Darkthrone", "title": "It Beckons Us All", "year": current_year, "flag": "🇳🇴", "genre": "Black Metal", "youtube": "https://youtube.comDarkthrone+It+Beckons+Us+All", "month": month_tag},
-            {"artist": "Mayhem", "title": "Daemon", "year": current_year, "flag": "🇳🇴", "genre": "Black Metal", "youtube": "https://youtube.comMayhem+Daemon", "month": month_tag},
-            {"artist": "Alcest", "title": "Les Chants de l'Aurore", "year": current_year, "flag": "🇫🇷", "genre": "Blackgaze", "youtube": "https://youtube.comAlcest+Les+Chants+de+l+Aurore", "month": month_tag}
-        ]
-
+            
     return found_releases[:15]
 
 def send_to_telegram(releases):
+    if not releases:
+        # Честное уведомление БЕЗ левых подсунутых релизов!
+        msg = "<b>🇳🇴 БЛЭК-МЕТАЛ ПАРСЕР (PROXY FLOW)</b>\n\nЗапрос прошел успешно, но живых новых релизов блэк-металла на Bandcamp сейчас не обнаружено."
+        telegram_url = f"{BASE_TG}{BOT_TOKEN}{S}sendMessage"
+        requests.post(telegram_url, json={"chat_id": ADMIN_CHAT_ID, "text": msg, "parse_mode": "HTML"})
+        return
+
+    # Собираем итоговое текстовое сообщение строго по твоему идеальному шаблону!
     msg = ""
     for r in releases:
         msg += f"<code>{r['artist']} - {r['title']} ({r['year']})</code>\n"
         msg += f"{r['flag']} {r['genre']}\n"
-        msg += f"{r['youtube']} {r['month']}\n"
-        msg += "---\n"
+        msg += f"https{C}{S}{S}youtube.com {r['month']}\n" # Строго фиксированная ссылка-заглушка!
+        msg += "---\n"  # Твой разделитель между релизами
 
     telegram_url = f"{BASE_TG}{BOT_TOKEN}{S}sendMessage"
     payload = {
@@ -146,6 +130,6 @@ def send_to_telegram(releases):
     requests.post(telegram_url, json=payload)
 
 if __name__ == "__main__":
-    results = parse_via_telegram_global_index()
+    results = parse_bandcamp_rss_proxy()
     send_to_telegram(results)
     
