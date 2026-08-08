@@ -1,9 +1,9 @@
 name: Run Bandcamp Underground Collector
 
 on:
-  workflow_dispatch: # Позволяет запускать кнопкой в любую секунду!
+  workflow_dispatch:
   schedule:
-    - cron: '0 12 * * 1' # Сам запускается каждый понедельник в 12:00 по Гринвичу
+    - cron: '0 12 * * 1'
 
 jobs:
   run-bandcamp-script:
@@ -17,11 +17,11 @@ jobs:
         with:
           python-version: '3.10'
 
-      # Установка библиотек, включая новый бронебойный cloudscraper
+      # Устанавливаем Selenium и полноценный браузер Chrome для Linux
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests beautifulsoup4 cloudscraper
+          pip install requests beautifulsoup4 selenium webdriver-manager
 
       - name: Run Bandcamp Parser
         env:
