@@ -20,7 +20,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install curl_cffi typing_extensions
 
-      # ШАГ 6.8: Выводим первые 15 текстовых строк фида для анализа тегов
+      # ШАГ 6.9: Сканируем живой HTML на наличие скрытого музыкального блока данных
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
@@ -31,29 +31,44 @@ jobs:
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 6.8 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 6.9 ---")
           try:
               res = cloud_requests.get(URL_RSS, headers=HEADERS, impersonate="chrome110", timeout=20)
               
               if res.status_code == 200 and len(res.text) > 1000:
-                  # Разрезаем весь полученный XML по переносу строки
-                  lines = res.text.split("\n")
-                  print(f" Всего строк в файле: {len(lines)}")
+                  html = res.text
                   
-                  print("\n ПЕРВЫЕ 15 СТРОК ДЛЯ ИЗУЧЕНИЯ СТРУКТУРЫ:")
-                  for idx, line in enumerate(lines[:15]):
-                      # Заменяем угловые скобки, чтобы GitHub не скрыл их как HTML-теги
-                      clean_line = line.replace("<", "&lt;").replace(">", "&gt;")
-                      print(f"Строка {idx+1}: {clean_line}")
+                  # Ищем ключевую сигнатуру современной верстки Bandcamp
+                  marker = 'data-initial-items="'
+                  if marker in html:
+                      print("1. УСПЕХ: Блок data-initial-items успешно найден!")
+                      start_idx = html.find(marker) + len(marker)
+                      # Печатаем срез данных, чтобы увидеть, группы ли там лежат
+                      print(f"2. Срез сырых данных: {html[start_idx:start_idx+400]}")
+                  else:
+                      print("1. Метрика data-initial-items не найдена.")
+                      
+                      # Проверим альтернативный современный маркер релизов
+                      alt_marker = 'data-blob="'
+                      if alt_marker in html:
+                          print("1.1. Найдена альтернативная метка data-blob!")
+                          start_idx = html.find(alt_marker) + len(alt_marker)
+                          print(f"2.1. Срез alt-данных: {html[start_idx:start_idx+400]}")
+                      else:
+                          print("1.1. Альтернативные метки тоже отсутствуют.")
+                          
+                          # Ищем вообще любое упоминание названий групп (проверим слово "by ")
+                          by_count = html.count(" by ")
+                          print(f"2.2. Всего вхождений маркера ' by ' в коде страницы: {by_count}")
               else:
-                  print("СБОЙ: Ответ пуст.")
+                  print("СБОЙ: Страница пуста.")
                   
           except Exception as e:
               print(f"КРИТИЧЕСКАЯ ОШИБКА: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем вывод структуры
+      # Запускаем поиск маркера
       - name: Run RSS Content Test
         run: python test_metal.py
         
