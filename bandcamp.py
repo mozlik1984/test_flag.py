@@ -4,17 +4,10 @@ from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
 
-# Строгое архитектурное правило: сборка служебных знаков и эмодзи через ASCII/Юникод
+# Строгое правило: сборка служебных знаков через ASCII
 d = chr(46)
 c = chr(58)
 s = chr(47)
-
-# Собираем эмодзи через Юникод-коды, чтобы телефон не ломал синтаксис!
-EMOJI_LUPA = chr(0x1F50E)  # 🔎
-EMOJI_DIAG = chr(0x1F4CA)  # 📊
-EMOJI_CROSS = chr(0x274C)  # ❌
-EMOJI_FIRE = chr(0x1F525)   # 🔥
-EMOJI_DEFAULT_FLAG = chr(0x1F1E7) + chr(0x1F1FB)  # 🇧🇻 (Тру-дефолт флаг острова Буве для блэка)
 
 # Посимвольная сборка неблокируемого шлюза виджетов: https://bandcamp.com
 EMBED_DOM = f"https{c}{s}{s}bandcamp{d}com{s}EmbeddedPlayer"
@@ -32,23 +25,6 @@ BLACK_METAL_TAGS = [
 ]
 
 FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk"]
-
-# Кодируем флаги стран через пары Юникод-символов региональных индикаторов
-COUNTRY_FLAGS = {
-    "norway": chr(0x1F1E6) + chr(0x1F1F4),        # 🇳🇴
-    "sweden": chr(0x1F1F8) + chr(0x1F1EA),        # 🇸🇪
-    "finland": chr(0x1F1EB) + chr(0x1F1EE),       # 🇫🇮
-    "france": chr(0x1F1EB) + chr(0x1F1F7),        # 🇫🇷
-    "germany": chr(0x1F1DE) + chr(0x1F1EA),       # 🇩🇪
-    "usa": chr(0x1F1FA) + chr(0x1F1F8),           # 🇺🇸
-    "united states": chr(0x1F1FA) + chr(0x1F1F8), # 🇺🇸
-    "ukraine": chr(0x1F1FA) + chr(0x1F1E6),       # 🇺🇦
-    "poland": chr(0x1F1F5) + chr(0x1F1B1),        # 🇵🇱
-    "austria": chr(0x1F1E6) + chr(0x1F1F9),       # 🇦🇹
-    "italy": chr(0x1F1EE) + chr(0x1F1F9),         # 🇮🇹
-    "canada": chr(0x1F1E4) + chr(0x1F1E6),        # 🇨🇦
-    "iceland": "🇮🇸", "greece": "🇬🇷", "russia": "🇷🇺", "united kingdom": "🇬🇧"
-}
 
 def parse_bandcamp_embedded_perfect():
     now = datetime.now()
@@ -98,24 +74,24 @@ def parse_bandcamp_embedded_perfect():
                     
                 debug_log["total_parsed_items"] += 1
                 
-                if len(debug_log["sample_titles"]) {EMOJI_LUPA} ПОСТОЯННЫЙ ЛОГ ОТЛАДКИ EMBEDDED PLAYER</b>\n\n"
-    msg += f"<b>{EMOJI_DIAG} Метрики шлюза:</b>\n"
-    msg += f"• Код ответа Bandcamp: <code>{debug_log['status_code']}</code>\n"
-    msg += f"• Получено символов HTML: <code>{debug_log['raw_text_length']}</code>\n"
-    msg += f"• Элементов найдено в верстке: <code>{debug_log['total_parsed_items']}</code>\n"
-    msg += f"• Отсеяно фильтром поджанров: <code>{debug_log['skipped_by_filters']}</code>\n"
-    msg += f"• Что прислал плеер (сырые строки): <code>[{samples_str}]</code>\n"
+                if len(debug_log["sample_titles"]) DIAGNOSTIC LOG EMBEDDED PLAYER</b>\n\n"
+    msg += f"<b>METRICS:</b>\n"
+    msg += f"• Bandcamp status: <code>{debug_log['status_code']}</code>\n"
+    msg += f"• HTML length: <code>{debug_log['raw_text_length']}</code>\n"
+    msg += f"• Total items found: <code>{debug_log['total_parsed_items']}</code>\n"
+    msg += f"• Skipped by filter: <code>{debug_log['skipped_by_filters']}</code>\n"
+    msg += f"• Raw player lines: <code>[{samples_str}]</code>\n"
     if debug_log["error_message"]:
-        msg += f"• Ошибка внутри кода: <code>{debug_log['error_message']}</code>\n"
+        msg += f"• Code error: <code>{debug_log['error_message']}</code>\n"
     msg += "\n"
     
     if not releases:
-        msg += f"{EMOJI_CROSS} <b>Результат фильтра:</b> Живых блэк-метал новинок внутри виджета не распознано."
+        msg += "RESULT: No black metal releases detected inside widget."
     else:
-        msg += f"{EMOJI_FIRE} <b>НОВЫЕ ЖИВЫЕ РЕЛИЗЫ С BANDCAMP:</b>\n\n"
+        msg += "NEW RELEASES FROM BANDCAMP:\n\n"
         for r in releases:
             msg += f"<code>{r['artist']} - {r['title']} ({r['year']})</code>\n"
-            msg += f"{r['flag']} {r['genre']}\n"
+            msg += f"Genre: {r['genre']}\n"
             msg += f"https{c}{s}{s}youtube{d}com {r['month']}\n"
             msg += "---\n"
 
