@@ -18,13 +18,13 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install beautifulsoup4 curl_cffi
+          pip install curl_cffi
 
-      # ШАГ 6.3: Находим музыкальные блоки entry и вытаскиваем заголовки
+      # ШАГ 6.4: Текстовый сканер регулярных выражений без ломающихся HTML-парсеров
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
-          from bs4 import BeautifulSoup
+          import re
           from curl_cffi import requests as cloud_requests
 
           URL_RSS = "https://bandcamp.com"
@@ -32,47 +32,38 @@ jobs:
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 6.3 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 6.4 ---")
           try:
               res = cloud_requests.get(URL_RSS, headers=HEADERS, impersonate="chrome110", timeout=20)
               print(f"1. Код ответа Bandcamp: {res.status_code}")
               print(f"2. Количество символов в ленте: {len(res.text)}")
               
               if res.status_code == 200 and len(res.text) > 1000:
-                  soup = BeautifulSoup(res.text, "html.parser")
+                  # Ищем всё, что находится строго между <title> и </title>
+                  raw_titles = re.findall(r"<title>(.*?)</title>", res.text)
+                  print(f"3. Всего текстовых заголовков извлечено: {len(raw_titles)}")
                   
-                  # Ищем все музыкальные блоки entry, которые Bandcamp использует в RSS
-                  entries = soup.find_all("entry")
-                  print(f"3. Всего музыкальных блоков entry обнаружено: {len(entries)}")
-                  
-                  print("\n4. ЖИВЫЕ СТРОКИ РЕЛИЗОВ ИЗ БЛОКОВ:")
+                  print("\n4. ПЕРВЫЕ НАСТОЯЩИЕ СТРОКИ РЕЛИЗОВ С САЙТА:")
                   count = 0
-                  for entry in entries:
-                      # Вытаскиваем текст первого попавшегося вложенного тега title внутри entry
-                      title_tag = entry.find("title")
-                      if title_tag:
-                          print(f"   -> Релиз: {title_tag.text.strip()}")
-                          count += 1
-                          if count >= 5:
-                              break
-                  
-                  # Дополнительная проверка на случай если html.parser переименовал теги в нижний регистр
-                  if count == 0:
-                      print("Блоки 'entry' не распознаны, пробуем прямой текстовый поиск по маркерам...")
-                      lines = res.text.split("<title>")
-                      for line in lines[2:7]: # Пропускаем первые два глобальных заголовка сайта
-                          if "</title>" in line:
-                              print(f"   -> Из текста: {line.split('</title>')[0].strip()}")
-                              
+                  for t in raw_titles:
+                      title_clean = t.strip()
+                      # Пропускаем первые два глобальных заголовка самого сайта Bandcamp
+                      if "bandcamp" in title_clean.lower() or "new releases" in title_clean.lower():
+                          continue
+                          
+                      print(f"   -> Найдена группа и альбом: {title_clean}")
+                      count += 1
+                      if count >= 7:
+                          break
               else:
-                  print("3. СБОЙ: Лента пуста.")
+                  print("3. СБОЙ: Ответ пуст.")
                   
           except Exception as e:
               print(f"КРИТИЧЕСКАЯ ОШИБКА: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем исправленный текстовый тест
+      # Запускаем прямой текстовый сканер
       - name: Run RSS Content Test
         run: python test_metal.py
         
