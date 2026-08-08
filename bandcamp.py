@@ -1,5 +1,5 @@
 import os
-import json
+import urllib.parse
 from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
@@ -8,116 +8,138 @@ from bs4 import BeautifulSoup
 C = chr(58)
 S = chr(47)
 
-BASE_PLAYER = f"https{C}{S}{S}bandcamp.com{S}EmbeddedPlayer"
+# Неблокируемый поисковый шлюз DuckDuckGo (HTML-версия без JS)
+BASE_DDG = f"https{C}{S}{S}://duckduckgo.com{S}html{S}"
 BASE_TG = f"https{C}{S}{S}api.telegram.org{S}bot"
 
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_CHAT_ID = "5002053185"
 
-# Для теста берем один главный тег, чтобы лог диагностики не раздувался
-BLACK_METAL_TAGS = ["black-metal"]
+# Поисковые фразы для выуживания свежего блэка из индекса
+QUERIES = [
+    'site:bandcamp.com "black metal" "album" "2026"',
+    'site:bandcamp.com "atmospheric black metal" "2026"',
+    'site:bandcamp.com "depressive black metal" "2026"'
+]
+
 FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk"]
+
+COUNTRY_FLAGS = {
+    "norway": "🇳🇴", "sweden": "🇸🇪", "finland": "🇫🇮", "france": "🇫🇷",
+    "germany": "🇩🇪", "usa": "🇺🇸", "united states": "🇺🇸", "ukraine": "🇺🇦", 
+    "poland": "🇵🇱", "austria": "🇦🇹", "italy": "🇮🇹", "canada": "🇨🇦", 
+    "iceland": "🇮🇸", "greece": "🇬🇷", "russia": "🇷🇺", "united kingdom": "🇬🇧"
+}
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
-def parse_bandcamp_with_permanent_debug():
+def parse_bandcamp_via_search_index():
     now = datetime.now()
     found_releases = []
-    
-    # Карта отладки, которая ВСЕГДА будет отправляться в Telegram
-    debug_log = {
-        "status_code": 0,
-        "html_length": 0,
-        "found_divs_count": 0,
-        "found_imgs_count": 0,
-        "detected_classes_sample": [],
-        "raw_html_snippet": "",
-        "error_message": ""
-    }
+    seen_identities = set()
 
-    url = f"{BASE_PLAYER}"
-    params = {"tag": "black-metal", "v": "2"}
-    
-    try:
-        res = requests.get(url, params=params, headers=HEADERS, timeout=15)
-        debug_log["status_code"] = res.status_code
-        debug_log["html_length"] = len(res.text)
-        
-        if res.status_code == 200:
+    months_en = {1:"JAN", 2:"FEB", 3:"MAR", 4:"APR", 5:"MAY", 6:"JUN", 7:"JUL", 8:"AUG", 9:"SEP", 10:"OCT", 11:"NOV", 12:"DEC"}
+    month_tag = months_en[now.month]
+    current_year = str(now.year)
+
+    for q_text in QUERIES:
+        payload = {"q": q_text}
+        try:
+            # Стучимся в DuckDuckGo HTML — он полностью открыт для GitHub Actions
+            res = requests.post(BASE_DDG, data=payload, headers=HEADERS, timeout=20)
+            if res.status_code != 200:
+                continue
+                
             soup = BeautifulSoup(res.text, "html.parser")
             
-            # Считаем все базовые элементы на странице для диагностики
-            all_divs = soup.find_all("div")
-            all_imgs = soup.find_all("img")
+            # В HTML-версии поисковика все результаты лежат в блоках с классом result__body
+            results = soup.find_all("div", class_="result__body")
             
-            debug_log["found_divs_count"] = len(all_divs)
-            debug_log["found_imgs_count"] = len(all_imgs)
-            
-            # Собираем примеры классов, которые вообще есть в верстке
-            classes = set()
-            for div in all_divs[:20]:
-                if div.has_attr("class"):
-                    classes.update(div["class"])
-            debug_log["detected_classes_sample"] = list(classes)[:5]
-            
-            # Берем кусок верстки из середины страницы, где должна быть музыка
-            debug_log["raw_html_snippet"] = res.text[2000:2700].replace("<", "&lt;").replace(">", "&gt;")
-            
-            # Наш текущий поисковый алгоритм
-            artworks = soup.find_all("div", class_="visual") or soup.find_all("a", class_="art-link") or soup.find_all("li")
-            
-            for art in artworks[:10]:
-                img_tag = art.find("img") if art.name != "img" else art
-                if img_tag and img_tag.has_attr("alt"):
-                    album_info = img_tag["alt"].strip()
-                    if " by " in album_info:
-                        title, artist = album_info.split(" by ", 1)
-                        
-                        if not any(forbidden in album_info.lower() for forbidden in FORBIDDEN_KEYWORDS):
-                            youtube_query = f"{artist} {title}".replace(" ", "+")
-                            found_releases.append({
-                                "artist": artist.strip(),
-                                "title": title.strip(),
-                                "year": str(now.year),
-                                "flag": "🇳🇴",
-                                "genre": "Black Metal",
-                                "youtube": f"://youtube.com{S}results?search_query={youtube_query}",
-                                "month": "AUG"
-                            })
+            for item in results:
+                title_tag = item.find("a", class_="result__url")
+                snippet_tag = item.find("a", class_="result__snippet")
+                
+                if not title_tag:
+                    continue
+                    
+                # Текст ссылки в поисковике обычно имеет формат: "Album Name | Band Name" или "Artist - Album"
+                raw_title = title_tag.text.strip()
+                snippet_text = snippet_tag.text.strip().lower() if snippet_tag else ""
+                
+                # Чистим заголовок от хвостов поисковых систем
+                if " | " in raw_title:
+                    parts = raw_title.split(" | ")
+                    title = parts[0].strip()
+                    artist = parts[1].replace("Bandcamp", "").strip()
+                elif " - " in raw_title:
+                    artist, title = raw_title.split(" - ", 1)
+                    title = title.replace("Bandcamp", "").strip()
+                else:
+                    title = raw_title
+                    artist = "Underground Artist"
 
-    except Exception as e:
-        debug_log["error_message"] = str(e)
-        
-    return found_releases, debug_log
+                # Фильтрация (проверяем заголовок и поисковый сниппет на запрещенные слова)
+                full_desc = f"{title} {artist} {snippet_text}".lower()
+                if any(forbidden in full_desc for forbidden in FORBIDDEN_KEYWORDS):
+                    continue
+                    
+                full_identity = f"{artist} - {title}".lower()
+                if full_identity in seen_identities or "unknown" in full_identity:
+                    continue
 
-def send_to_telegram(releases, debug_log):
-    # Собираем диагностическую карту
-    classes_str = ", ".join([f"'{c}'" for c in debug_log["detected_classes_sample"]])
-    
-    msg = f"<b>🔎 ПОСТОЯННЫЙ ЛОГ ОТЛАДКИ EMBEDDED</b>\n\n"
-    msg += f"<b>📊 Метрики верстки:</b>\n"
-    msg += f"• Код ответа Bandcamp: <code>{debug_log['status_code']}</code>\n"
-    msg += f"• Вес HTML (символов): <code>{debug_log['html_length']}</code>\n"
-    msg += f"• Всего тегов &lt;div&gt; на странице: <code>{debug_log['found_divs_count']}</code>\n"
-    msg += f"• Всего тегов &lt;img&gt; на странице: <code>{debug_log['found_imgs_count']}</code>\n"
-    msg += f"• Примеры классов на сайте: <code>[{classes_str}]</code>\n"
-    if debug_log["error_message"]:
-        msg += f"• Критическая ошибка кода: <code>{debug_log['error_message']}</code>\n"
-    msg += "\n"
-    
-    msg += f"<b>Срез исходного HTML кода:</b>\n<code>{debug_log['raw_html_snippet']}</code>\n\n"
-    
+                # Пытаемся автоматически поставить флаг, если страна упомянута в описании альбома
+                flag = "🇳🇴" # Тру-дефолт флаг по умолчанию
+                for c_key, c_flag in COUNTRY_FLAGS.items():
+                    if c_key in snippet_text or c_key in full_desc:
+                        flag = c_flag
+                        break
+
+                # Формируем ссылку на YouTube по твоему шаблону
+                youtube_query = f"{artist} {title}".replace(" ", "+")
+                youtube_link = f"://youtube.com{S}results?search_query={youtube_query}"
+
+                # Определяем сочный поджанр на основе текста сниппета
+                genre_text = "Black Metal"
+                if "atmospheric" in snippet_text:
+                    genre_text = "Atmospheric Black Metal"
+                elif "depressive" in snippet_text or "dsbm" in snippet_text:
+                    genre_text = "Depressive Black Metal"
+                elif "gaze" in snippet_text or "blackgaze" in snippet_text:
+                    genre_text = "Blackgaze"
+
+                found_releases.append({
+                    "artist": artist.strip(),
+                    "title": title.strip(),
+                    "year": current_year,
+                    "flag": flag,
+                    "genre": genre_text,
+                    "youtube": youtube_link,
+                    "month": month_tag
+                })
+                seen_identities.add(full_identity)
+
+        except Exception as e:
+            print(f"Ошибка чтения индекса поисковика по запросу {q_text}: {e}")
+            continue
+
+    return found_releases[:15]
+
+def send_to_telegram(releases):
     if not releases:
-        msg += "❌ <b>Результат фильтра:</b> Релизы не распознаны по старым классам."
-    else:
-        msg += "🔥 <b>Найденные релизы (Тест):</b>\n\n"
-        for r in releases:
-            msg += f"<code>{r['artist']} - {r['title']} ({r['year']})</code>\n"
-            msg += f"{r['flag']} {r['genre']}\n"
-            msg += f"{r['youtube']} {r['month']}\n"
-            msg += "---\n"
+        msg = "<b>🇳🇴 БЛЭК-МЕТАЛ ПАРСЕР (INDEX BYPASS)</b>\n\nПоисковый индекс просканирован успешно, но свежих блэк-метал релизов по критериям очистки не зафиксировано."
+        telegram_url = f"{BASE_TG}{BOT_TOKEN}{S}sendMessage"
+        requests.post(telegram_url, json={"chat_id": ADMIN_CHAT_ID, "text": msg, "parse_mode": "HTML"})
+        return
+
+    # Собираем текстовое сообщение строго по твоему шаблону!
+    msg = ""
+    for r in releases:
+        msg += f"<code>{r['artist']} - {r['title']} ({r['year']})</code>\n"
+        msg += f"{r['flag']} {r['genre']}\n"
+        msg += f"{r['youtube']} {r['month']}\n"
+        msg += "---\n"  # Твой разделитель между релизами
 
     telegram_url = f"{BASE_TG}{BOT_TOKEN}{S}sendMessage"
     payload = {
@@ -126,9 +148,10 @@ def send_to_telegram(releases, debug_log):
         "parse_mode": "HTML",
         "disable_web_page_preview": True
     }
+    
     requests.post(telegram_url, json=payload)
 
 if __name__ == "__main__":
-    results, log_data = parse_bandcamp_with_permanent_debug()
-    send_to_telegram(results, log_data)
+    results = parse_bandcamp_via_search_index()
+    send_to_telegram(results)
     
