@@ -20,69 +20,72 @@ jobs:
           python -m pip install --upgrade pip
           pip install beautifulsoup4 curl_cffi
 
-      # ШАГ 5: Переводим шлюз в GET-режим и выводим блэк-метал строго по твоему шаблону!
+      # ШАГ 6: Штурмуем вечно открытые текстовые фиды Bandcamp RSS
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
-          import json
+          import xml.etree.ElementTree as ET
           from datetime import datetime
-          from bs4 import BeautifulSoup
           from curl_cffi import requests as cloud_requests
 
-          # Актуальный GET-шлюз для сбора глубокого андеграунда по тегам
-          URL_API = "https://bandcamp.com"
-          
+          # Берем официальный RSS-шлюз новинок
+          URL_RSS = "https://bandcamp.com"
           HEADERS = {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
           FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk"]
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 5 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 6 ---")
           try:
               now = datetime.now()
               month_tag = now.strftime("%b").upper()
               current_year = str(now.year)
 
-              # ИСПРАВЛЕНО: Передаем параметры через GET-строку, как требует Nginx на Bandcamp
-              params = {
-                  "tag": "black-metal",
-                  "sort_key": "date",
-                  "page": 0
-              }
+              # Запрашиваем чистый XML-текст фида
+              res = cloud_requests.get(URL_RSS, headers=HEADERS, impersonate="chrome110", timeout=20)
+              print(f"1. Код ответа RSS Bandcamp: {res.status_code}")
+              print(f"2. Количество символов XML: {len(res.text)}")
               
-              res_api = cloud_requests.get(URL_API, params=params, headers=HEADERS, impersonate="chrome110", timeout=20)
-              print(f"1. Код ответа GET-API Bandcamp: {res_api.status_code}")
-              
-              if res_api.status_code == 200:
-                  api_data = res_api.json()
+              if res.status_code == 200 and len(res.text) > 1000:
+                  # Парсим XML структуру новостной ленты Atom Feed
+                  root = ET.fromstring(res.text)
+                  ns = {'atom': 'http://w3.org'}
+                  entries = root.findall('atom:entry', ns)
                   
-                  # Проверяем все возможные списки вложенности релизов
-                  items = api_data.get("items", []) or api_data.get("results", []) or api_data.get("initial_results", [])
-                  print(f"2. УСПЕХ: Внутренний шлюз выдал сырых релизов: {len(items)}")
-                  
-                  print("\n3. СВЕЖИЙ БЛЭК-МЕТАЛ УЛОВ ПО ТВОЕМУ ШАБЛОНУ:\n")
+                  print(f"3. УСПЕХ: Найдено релизов в новостной ленте: {len(entries)}")
+                  print("\n4. СВЕЖИЙ БЛЭК-МЕТАЛ УЛОВ ПО ТВОЕМУ ШАБЛОНУ:\n")
                   
                   count = 0
-                  for item in items:
-                      title = item.get("title") or item.get("name") or "Unknown Album"
-                      artist = item.get("artist") or item.get("artist_name") or "Unknown Artist"
+                  for entry in entries:
+                      title_tag = entry.find('atom:title', ns)
+                      if title_tag is None:
+                          continue
+                          
+                      title_text = title_tag.text.strip()
                       
-                      # Собираем теги для блэк-метал очистки от дета/трэша
-                      tags_list = [t.lower() for t in item.get("tags", [])]
-                      full_desc = f"{title} {artist} {' '.join(tags_list)}".lower()
-                      
-                      if any(forbidden in full_desc for forbidden in FORBIDDEN_KEYWORDS):
+                      # Фильтрация поджанров (отсекаем трэш/дэт)
+                      if any(forbidden in title_text.lower() for forbidden in FORBIDDEN_KEYWORDS):
                           continue
 
-                      # Разбираем локацию группы для текстовой разметки страны
-                      location = item.get("artist_location", "").strip() or item.get("location", "Norway").strip()
-                      if ", " in location:
-                          location = location.split(", ")[-1]
-                      if not location or location == "null":
-                          location = "Norway"
+                      # Разбираем стандартный формат RSS "Album Name by Band Name"
+                      if " by " in title_text:
+                          title, artist = title_text.rsplit(" by ", 1)
+                      else:
+                          title, artist = title_text, "Underground Artist"
 
-                      # Выводим в консоль строго один в один по твоему идеальному шаблону!
+                      # Ищем страну в блоке аннотации summary
+                      summary_tag = entry.find('atom:summary', ns)
+                      summary_text = summary_tag.text.lower() if summary_tag is not None else ""
+                      
+                      location = "Norway"
+                      for country in ["sweden", "finland", "france", "germany", "usa", "ukraine", "poland", "austria"]:
+                          if country in summary_text or country in title_text.lower():
+                              location = country.title()
+                              if location == "Usa": location = "USA"
+                              break
+
+                      # Выводим строго в твоем идеальном текстовом формате!
                       print(f"<code>{artist.strip()} - {title.strip()} ({current_year})</code>")
                       print(f"[{location}] Black Metal")
                       print(f"https://youtube.com {month_tag}")
@@ -92,14 +95,14 @@ jobs:
                       if count >= 10:
                           break
               else:
-                  print(f"СБОЙ ШЛЮЗА: Текст ошибки: {res_api.text[:200]}")
+                  print("3. СБОЙ: Фид вернул пустой текст или ошибку.")
                   
           except Exception as e:
-              print(f"ОШИБКА НА ШАГЕ 5: {e}")
+              print(f"ОШИБКА НА ШАГЕ 6: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем исправленный GET-тест на экране Гитхаба
-      - name: Run GET API Test
+      # Запускаем RSS тест
+      - name: Run RSS Feed Test
         run: python test_metal.py
         
