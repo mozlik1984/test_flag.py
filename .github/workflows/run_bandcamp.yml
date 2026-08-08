@@ -17,13 +17,11 @@ jobs:
         with:
           python-version: '3.10'
 
-      # ИСПРАВЛЕНО: Чистая и аккуратная установка без дублирования слов pip
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4 curl_cffi
 
-      # Полностью выжигаем старые кэшированные файлы
       - name: Kill old cache
         run: rm -f bandcamp.py skaner.py inferno.py
 
@@ -48,7 +46,8 @@ jobs:
           BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
           ADMIN_CHAT_ID = "5002053185"
 
-          QUERIES = ["black metal album", "atmospheric black metal", "depressive black metal"]
+          # ИСПРАВЛЕНО: Ищем по одному строгому слову, чтобы шлюз не выдавал 0 результатов
+          QUERIES = ["black-metal", "blackgaze"]
           FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk"]
 
           def run_furious_parser():
@@ -65,7 +64,8 @@ jobs:
               current_year = str(now.year)
 
               for query in QUERIES:
-                  params = {"q": query, "item_type": "a", "page": 1}
+                  # Добавили жесткий тег в параметры, чтобы Bandcamp выгрузил весь андеграунд
+                  params = {"q": query, "item_type": "a", "tags": query, "page": 1}
                   try:
                       res = cloud_requests.get(BASE_API, params=params, impersonate="chrome110", timeout=15)
                       
@@ -146,7 +146,6 @@ jobs:
               run_furious_parser()
           EOF
 
-      # Запускаем созданный файл bandcamp.py
       - name: Run Bandcamp Parser
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
