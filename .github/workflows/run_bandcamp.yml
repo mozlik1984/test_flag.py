@@ -40,7 +40,6 @@ jobs:
           c = chr(58)
           s = chr(47)
 
-          # ПРЯМОЙ ШЛЮЗ СТРАНИЦ ТЕГОВ
           BASE_BC = f"https{c}{s}{s}bandcamp{d}com{s}tag{s}"
           BASE_TG = f"https{c}{s}{s}api{d}telegram{d}org{s}bot"
 
@@ -74,7 +73,6 @@ jobs:
               for tag in BLACK_METAL_TAGS:
                   url = f"{BASE_BC}{tag}"
                   try:
-                      # Делаем ПРЯМОЙ GET-запрос к странице тега через маскировку Chrome
                       res = cloud_requests.get(url, headers=headers, impersonate="chrome110", timeout=20)
                       
                       if status_code == 0:
@@ -85,20 +83,18 @@ jobs:
                           continue
                           
                       soup = BeautifulSoup(res.text, "html.parser")
-                      
-                      # ЖЕЛЕЗОБЕТОННЫЙ ПОИСК: Вытаскиваем абсолютно все ссылки на альбомы из верстки страницы
                       links = soup.find_all("a", href=True)
                       
                       for link in links:
                           href = link["href"].lower()
                           text = link.text.strip()
                           
-                          # Нам нужны только музыкальные ссылки на релизы Bandcamp
                           if "://bandcamp.com" in href or "/album/" in href:
-                              if not text or len(text) {r['artist']} - {r['title']} ({r['year']})</code>\n"
-                      msg += f"{r['country']} {r['genre']}\n"
-                      msg += f"https{c}{s}{s}youtube{d}com {month_tag}\n"
-                      msg += "---\n"
+                              if not text or len(text) {r['artist']} - {r['title']} ({r['year']})</code>
+{r['country']} {r['genre']}
+https{c}{s}{s}youtube{d}com {month_tag}
+---
+"""
 
               telegram_url = f"{BASE_TG}{BOT_TOKEN}{s}sendMessage"
               payload = {
