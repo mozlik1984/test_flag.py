@@ -20,7 +20,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4 curl_cffi typing_extensions
 
-      # ШАГ 7.2: Копаем внутрь featuredEditorial и печатаем сырые названия альбомов
+      # ШАГ 7.3: Вскрываем pageContext, чтобы найти точную папку с альбомами
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
@@ -33,7 +33,7 @@ jobs:
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 7.2 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 7.3 ---")
           try:
               res = cloud_requests.get(URL_RSS, headers=HEADERS, impersonate="chrome110", timeout=20)
               
@@ -49,48 +49,26 @@ jobs:
                       clean_blob = html.unescape(raw_blob)
                       data = json.loads(clean_blob)
                       
-                      # Прыгаем сразу к нашему блоку с релизами
-                      app_data = data.get("appData", {})
-                      editorial = app_data.get("featuredEditorial", {})
+                      # Вскрываем второй главный блок — pageContext
+                      page_context = data.get("pageContext", {})
+                      print("1. УСПЕХ: Блок pageContext извлечен!")
+                      print(f"2. Подразделы внутри pageContext: {list(page_context.keys())}")
                       
-                      # featuredEditorial может содержать ключ 'items' или 'bigItem'
-                      items = []
-                      if isinstance(editorial, dict):
-                          # Проверяем все типичные ключи вложенности списков Bandcamp
-                          items = editorial.get("items", []) or editorial.get("articles", [])
-                          big_item = editorial.get("bigItem")
-                          if big_item:
-                              items.insert(0, big_item)
-                              
-                      print(f"1. Из секции featuredEditorial извлечено элементов: {len(items)}")
-                      
-                      print("\n2. ЖИВЫЕ СТРОКИ ИЗ ОБЗОРОВ BANDCAMP:")
-                      count = 0
-                      for item in items:
-                          # Проверяем разные названия полей (в статьях часто пишутся title, artist, subtitle)
-                          title = item.get("title") or item.get("album_title") or "Unknown Title"
-                          artist = item.get("artist") or item.get("band_name") or "Unknown Artist"
-                          url = item.get("url") or item.get("article_url") or "No URL"
-                          
-                          print(f"   -> Найдено: {artist} - {title} | Ссылка: {url}")
-                          count += 1
-                          if count >= 5:
-                              break
-                              
-                      if count == 0:
-                          print("Секция пуста, выводим сырой дамп блока для анализа:")
-                          print(json.dumps(editorial, indent=2)[:500])
+                      # Проверяем, нет ли там ключей вроде 'tag_name', 'hub_id' или списков данных
+                      for key in page_context.keys():
+                          val = page_context[key]
+                          if isinstance(val, list):
+                              print(f"   -> Обнаружен СПИСОК '{key}' длиной {len(val)} элементов!")
+                          elif isinstance(val, dict):
+                              print(f"   -> Обнаружен СЛОВАРЬ '{key}' с ключами: {list(val.keys())[:4]}")
                   else:
-                      print("СБОЙ: Маркер data-blob не найден.")
-              else:
-                  print("СБОЙ: Ответ пуст.")
-                  
+                      print("СБОЙ: data-blob не найден.")
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 7.2: {e}")
+              print(f"ОШИБКА НА ШАГЕ 7.3: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем извлечение названий групп
+      # Запускаем анализ pageContext
       - name: Run JSON Decode Test
         run: python test_metal.py
         
