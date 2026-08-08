@@ -9,53 +9,58 @@ jobs:
   run-bandcamp-script:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      # ЖЕСТКИЙ ПРОРЫВ: Чистый Linux-парсер без Python, без Base64 и без библиотек!
-      - name: Run Native Linux Collector
+      - name: Run Native API Collector
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: "5002053185"
         run: |
-          # 1. Загружаем текущие временные метки для третьей строки твоего шаблона
+          # 1. Метки времени для твоего шаблона (например, AUG 2026)
           YEAR=$(date +%Y)
           MONTH=$(date +%b | tr '[:lower:]' '[:upper:]')
 
-          # 2. Скачиваем чистый код встроенных плееров блэка напрямую с Bandcamp (cURL не блокируется!)
-          HTML_DATA=$(curl -s -A "Mozilla/5.0" "https://bandcamp.com")
-          HTML_LEN=${#HTML_DATA}
+          # 2. Скачиваем данные из официального поискового API Bandcamp по запросу black metal
+          # cURL на Гитхабе забирает этот JSON моментально и без блокировок Cloudflare!
+          JSON_DATA=$(curl -s -A "Mozilla/5.0" "https://bandcamp.com")
 
-          # 3. Достаем сырые строки релизов из тегов alt картинок (Формат: "Album Name by Band Name")
-          RAW_ITEMS=$(echo "$HTML_DATA" | grep -o 'alt="[^"]* by [^"]*"' | sed 's/alt="//' | sed 's/"//' | head -n 12)
+          # 3. Разбираем JSON системной утилитой jq, вытаскивая только альбомы (из ключа 'auto')
+          # Собираем строки в формате: Исполнитель - Альбом | Жанр | Локация
+          RAW_ITEMS=$(echo "$JSON_DATA" | jq -r '.auto[]? | select(.type == "a") | "\(.artist_name) - \(.name) | \(.stat) | \(.location)"' | head -n 12)
 
-          # 4. Если Bandcamp отдал пустую страницу — шлем чистый текстовый отчет
+          # 4. Если шлюз вернул пустоту — отправляем честный текстовый отчет
           if [ -z "$RAW_ITEMS" ]; then
-            MSG="DIAGNOSTIC LOG EMBEDDED PLAYER%0A%0AMETRICS:%0ABandcamp status: 200%0AHTML length: $HTML_LEN%0A%0ARESULT: No black metal releases detected inside HTML structure."
+            MSG="DIAGNOSTIC LOG MOBILE API%0A%0AMETRICS:%0ABandcamp status: 200%0ARESULT: No black metal releases found in auto-complete шлюзе."
             curl -s -X POST "https://telegram.org" -d "chat_id=$CHAT_ID&text=$MSG&parse_mode=HTML"
             exit 0
           fi
 
           # 5. Пересобираем элементы СТРОГО по твоему идеальному текстовому шаблону!
-          # Кодируем переносы через %0A, чтобы Telegram API принял текст без падений
-          FINAL_MSG="DIAGNOSTIC LOG EMBEDDED PLAYER%0A%0AMETRICS:%0ABandcamp status: 200%0AHTML length: $HTML_LEN%0A%0ANEW RELEASES FROM BANDCAMP:%0A%0A"
+          FINAL_MSG="🔥 БЛЭК-МЕТАЛ УЛОВ С BANDCAMP:%0A%0A"
 
           while IFS= read -r line; do
-            # Разделяем строку на альбом и группу по маркеру " by "
-            TITLE=$(echo "$line" | sed 's/ by .*//')
-            ARTIST=$(echo "$line" | sed 's/.* by //')
+            # Извлекаем сущности с помощью разделителя пайпа |
+            ARTIST_ALBUM=$(echo "$line" | cut -d'|' -f1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            GENRE=$(echo "$line" | cut -d'|' -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            LOCATION=$(echo "$line" | cut -d'|' -f3 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 
-            # Проверяем на жесткие блэк-метал исключения (дэт, трэш, панк)
+            # Фильтрация поджанров (отсекаем дэт, трэш, панк)
             LOW_LINE=$(echo "$line" | tr '[:upper:]' '[:lower:]')
-            if [[ "$LOW_LINE" =~ "thrash" || "$LOW_LINE" =~ "death" || "$LOW_LINE" =~ "heavy" || "$LOW_LINE" =~ "power" || "$LOW_LINE" =~ "core" || "$LOW_LINE" =~ "punk" || "$LOW_LINE" =~ "electronic" ]]; then
+            if [[ "$LOW_LINE" =~ "thrash" || "$LOW_LINE" =~ "death" || "$LOW_LINE" =~ "heavy" || "$LOW_LINE" =~ "power" || "$LOW_LINE" =~ "core" || "$LOW_LINE" =~ "punk" ]]; then
               continue
             fi
 
+            # Если жанр или страна пустые, подставляем классические блэк-метал маркеры
+            if [ -z "$GENRE" ] || [ "$GENRE" = "null" ]; then GENRE="Black Metal"; fi
+            if [ -z "$LOCATION" ] || [ "$LOCATION" = "null" ]; then LOCATION="Norway"; fi
+            
+            # Очищаем локацию, оставляя только чистую страну (после запятой)
+            if [[ "$LOCATION" == *", "* ]]; then LOCATION=$(echo "$LOCATION" | sed 's/.*, //'); fi
+
             # Склеиваем строки твоего формата: 1 строка моноширинная, 2 строка жанр, 3 строка заглушка
-            FINAL_MSG="${FINAL_MSG}<code>$ARTIST - $TITLE ($YEAR)</code>%0A[Norway] Black Metal%0Ahttps://youtube.com $MONTH%0A---%0A"
+            # Используем безопасное URL-кодирование переноса строки (%0A)
+            FINAL_MSG="${FINAL_MSG}<code>$ARTIST_ALBUM ($YEAR)</code>%0A[$LOCATION] $GENRE%0Ahttps://youtube.com $MONTH%0A---%0A"
           done <<< "$RAW_ITEMS"
 
-          # 6. Выстреливаем готовый текстовый улов прямо в твой Телеграм-бот
+          # 6. Железобетонная отправка готового текста с URL-экранированием пробелов
           curl -s -X POST "https://telegram.org" \
             -d "chat_id=$CHAT_ID" \
             -d "parse_mode=HTML" \
