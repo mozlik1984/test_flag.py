@@ -17,16 +17,17 @@ jobs:
         with:
           python-version: '3.10'
 
+      # ИСПРАВЛЕНО: Чистая и аккуратная установка без дублирования слов pip
       - name: Install dependencies
         run: |
-          python -m pip pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install requests beautifulsoup4 curl_cffi
 
       # Полностью выжигаем старые кэшированные файлы
       - name: Kill old cache
         run: rm -f bandcamp.py skaner.py inferno.py
 
-      # САМЫЙ ВАЖНЫЙ ШАГ: Сборщик сам создаст чистый файл bandcamp.py в корне репозитория!
+      # Сборщик сам создаст чистый файл bandcamp.py в корне репозитория!
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > bandcamp.py
