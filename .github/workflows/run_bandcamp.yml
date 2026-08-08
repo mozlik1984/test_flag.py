@@ -20,7 +20,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install beautifulsoup4 curl_cffi
 
-      # ШАГ 2: Выводим карту ключей JSON, чтобы найти, где спрятана музыка
+      # ШАГ 2 (ИСПРАВЛЕНО): Выводим точную карту ключей без синтаксических ошибок
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
@@ -35,7 +35,8 @@ jobs:
 
           print("--- СТАРТ ДИАГНОСТИКИ ШАГА 2 ---")
           try:
-              res = cloud_requests.get(URL, headers=headers, impersonate="chrome110", timeout=20)
+              # ИСПРАВЛЕНО: Регистр переменной HEADERS теперь совпадает идеально
+              res = cloud_requests.get(URL, headers=HEADERS, impersonate="chrome110", timeout=20)
               
               if res.status_code == 200:
                   soup = BeautifulSoup(res.text, "html.parser")
@@ -48,14 +49,14 @@ jobs:
                       print("1. Главные ключи в pagedata JSON:")
                       print(list(data.keys()))
                       
-                      # Заходим на уровень глубже в самые подозрительные ключи
+                      # Заходим на уровень глубже в самые подозрительные блоки
                       for key in ["hub_data", "tag_data", "items", "tracks"]:
                           if key in data:
                               print(f"\n2. Ключи внутри подблока '{key}':")
                               if isinstance(data[key], dict):
                                   print(list(data[key].keys()))
                                   
-                                  # Проверяем наличие вложенных табов (tabs)
+                                  # Ищем секцию вкладок (tabs)
                                   if "tabs" in data[key] and isinstance(data[key]["tabs"], dict):
                                       print(f"   -> Найдена секция tabs! Ее подразделы: {list(data[key]['tabs'].keys())}")
                               else:
@@ -67,7 +68,7 @@ jobs:
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем и смотрим структуру на экране Гитхаба
+      # Запускаем исправленный структурный тест
       - name: Run Structure Test
         run: python test_metal.py
         
