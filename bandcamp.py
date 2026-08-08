@@ -60,11 +60,10 @@ def run_furious_parser():
                 text = link.text.strip()
                 
                 if "://bandcamp.com" in href or "/album/" in href:
-                    if not text or len(text) {r['artist']} - {r['title']} ({r['year']})</code>
-{r['country']} {r['genre']}
-https{c}{s}{s}youtube{d}com {month_tag}
----
-"""
+                    if not text or len(text) " + r['artist'] + " - " + r['title'] + " (" + r['year'] + ")</code>" + chr(10)
+            msg += r['country'] + " " + r['genre'] + chr(10)
+            msg += "https" + c + s + s + "youtube" + d + "com " + month_tag + chr(10)
+            msg += "---" + chr(10)
 
     telegram_url = f"{BASE_TG}{BOT_TOKEN}{s}sendMessage"
     payload = {
