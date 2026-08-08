@@ -1,131 +1,118 @@
 import os
 import json
-import urllib.parse
 from datetime import datetime
 import requests
-from bs4 import BeautifulSoup
 
 # ASCII маскировка
 C = chr(58)
 S = chr(47)
 
-# Каскад из трех независимых публичных прокси-серверов
-PROXY_POOL = [
-    f"https{C}{S}{S}api.allorigins.win{S}get?url=",
-    f"https{C}{S}{S}://codetabs.com{S}cors-proxy{S}",
-    f"https{C}{S}{S}corsproxy.io{S}?"
-]
-
+# Неблокируемый поисковый микро-шлюз Bandcamp
+BASE_API = f"https{C}{S}{S}bandcamp.com{S}api{S}bcsearch{S}1{S}autocomplete"
 BASE_TG = f"https{C}{S}{S}api.telegram.org{S}bot"
 
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_CHAT_ID = "5002053185"
 
-BLACK_METAL_TAGS = [
-    "black-metal", "atmospheric-black-metal", "depressive-black-metal", 
-    "raw-black-metal", "symphonic-black-metal", "post-black-metal", 
-    "melodic-black-metal", "blackgaze"
-]
+# Поисковые фразы для захвата свежего блэка
+QUERIES = ["black metal", "atmospheric black metal", "depressive black metal", "blackgaze"]
+FORBIDDEN = ["thrash", "death", "heavy", "power", "core", "electronic", "punk"]
 
-FORBIDDEN_TAGS = ["thrash-metal", "death-metal", "heavy-metal", "power-metal", "metalcore", "punk", "electronic"]
+# Словарь для автоматической подстановки флагов стран (расширяемый)
+COUNTRY_FLAGS = {
+    "norway": "🇳🇴", "sweden": "🇸🇪", "finland": "🇫🇮", "france": "🇫🇷",
+    "germany": "🇩🇪", "usa": "🇺🇸", "ukraine": "🇺🇦", "poland": "🇵🇱",
+    "austria": "🇦🇹", "italy": "🇮🇹", "canada": "🇨🇦", "iceland": "🇮🇸"
+}
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
-def fetch_html_via_cascade(target_url):
-    """Пытается скачать HTML через пулл прокси-серверов по очереди"""
-    for proxy_base in PROXY_POOL:
-        try:
-            # Разные прокси требуют разного кодирования ссылки
-            if "allorigins" in proxy_base:
-                encoded_url = urllib.parse.quote_plus(target_url)
-                full_url = f"{proxy_base}{encoded_url}"
-            else:
-                full_url = f"{proxy_base}{target_url}"
-                
-            res = requests.get(full_url, headers=HEADERS, timeout=20)
-            if res.status_code == 200:
-                # У allorigins HTML-код зашит внутрь JSON ключа 'contents'
-                if "allorigins" in proxy_base:
-                    return res.json().get("contents", "")
-                return res.text
-        except Exception as e:
-            print(f"Шлюз {proxy_base[:30]} не справился, пробуем следующий... Ошибка: {e}")
-            continue
-    return ""
-
-def parse_bandcamp_via_proxy():
+def parse_bandcamp_micro_api():
+    now = datetime.now()
     found_releases = []
-    seen_urls = set()
-    total_raw_items = 0
+    seen_ids = set()
 
-    for tag in BLACK_METAL_TAGS:
-        target_url = f"https{C}{S}{S}bandcamp.com{S}tag{S}{tag}"
-        
-        # Получаем HTML через систему каскадных прокси
-        html_content = fetch_html_via_cascade(target_url)
-        if not html_content:
-            print(f"Ни один прокси не смог загрузить тег {tag}")
-            continue
-            
+    # Август текущего года в текстовом формате
+    months_en = {1:"JAN", 2:"FEB", 3:"MAR", 4:"APR", 5:"MAY", 6:"JUN", 7:"JUL", 8:"AUG", 9:"SEP", 10:"OCT", 11:"NOV", 12:"DEC"}
+    month_tag = months_en[now.month]
+
+    for q in QUERIES:
+        params = {"q": q}
         try:
-            soup = BeautifulSoup(html_content, "html.parser")
-            pagedata_tag = soup.find("div", id="pagedata") or soup.find("script", {"id": "pagedata"})
-            if not pagedata_tag:
+            res = requests.get(BASE_API, params=params, headers=HEADERS, timeout=15)
+            if res.status_code != 200:
                 continue
                 
-            raw_blob = pagedata_tag.get("data-blob") or pagedata_tag.text
-            if not raw_blob:
-                continue
-                
-            data = json.loads(raw_blob)
-            dig_deeper = data.get("hub_data", {}).get("tabs", {}).get("dig_deeper", {}).get("initial_results", [])
+            data = res.json()
+            # Результаты в микро-шлюзе лежат в ключе 'results'
+            items = data.get("results", [])
             
-            for item in dig_deeper:
-                total_raw_items += 1
-                album_url = item.get("tralbum_url")
-                if not album_url or album_url in seen_urls:
+            for item in items:
+                # Нам нужны только альбомы (type: "a")
+                if item.get("type") != "a":
                     continue
                     
-                item_tags = [t.lower() for t in item.get("tags", [])]
-                if any(forbidden in item_tags for forbidden in FORBIDDEN_TAGS):
+                item_id = item.get("id")
+                if item_id in seen_ids:
                     continue
+
+                title = item.get("name", "").strip()
+                artist = item.get("artist_name", "").strip()
+                album_url = item.get("url", "")
                 
-                clean_url = album_url.split('?') if '?' in album_url else album_url
-                
+                # Собираем жанры и описание релиза для фильтрации
+                genre_text = item.get("genre", "Black Metal").strip()
+                full_desc = f"{title} {artist} {genre_text}".lower()
+
+                # Жесткий блэк-метал отсев
+                if any(forbidden in full_desc for forbidden in FORBIDDEN):
+                    continue
+
+                # Пытаемся определить страну происхождения группы для эмодзи-флага
+                country_name = item.get("location", "").lower()
+                flag = "🇳🇴" # Тру-дефолт флаг, если страна в метаданных не указана
+                for c_key, c_flag in COUNTRY_FLAGS.items():
+                    if c_key in country_name:
+                        flag = c_flag
+                        break
+
+                # Генерируем чистую ссылку на YouTube-поиск для твоего шаблона
+                youtube_query = f"{artist} {title}".replace(" ", "+")
+                youtube_link = f"www.youtube.com{S}results?search_query={youtube_query}"
+
                 found_releases.append({
-                    "artist": item.get("artist", "Unknown Artist").strip(),
-                    "title": item.get("title", "Unknown Album").strip(),
-                    "url": clean_url
+                    "artist": artist,
+                    "title": title,
+                    "year": str(now.year),
+                    "flag": flag,
+                    "genre": genre_text,
+                    "youtube": youtube_link,
+                    "month": month_tag
                 })
-                seen_urls.add(album_url)
+                seen_ids.add(item_id)
 
         except Exception as e:
-            print(f"Ошибка обработки контента для тега {tag}: {e}")
+            print(f"Ошибка микро-шлюза по запросу {q}: {e}")
             continue
-            
-    print(f"Всего элементов выгружено через прокси: {total_raw_items}")
-    print(f"Успешно прошло блэк-метал очистку: {len(found_releases)}")
-    return found_releases[:15], total_raw_items
 
-def send_to_telegram(releases, total_raw):
-    months_ru = {1:"Январь", 2:"Февраль", 3:"Март", 4:"Апрель", 5:"Май", 6:"Июнь", 7:"Июль", 8:"Август", 9:"Сентябрь", 10:"Октябрь", 11:"Ноябрь", 12:"Декабрь"}
-    now = datetime.now()
-    
+    return found_releases[:15]
+
+def send_to_telegram(releases):
     if not releases:
-        msg = f"<b>🇳🇴 БЛЭК-МЕТАЛ ПАРСЕР (CASCADE PROXY)</b>\n\n"
-        msg += f"Каскад прокси отработал. Из JSON-блока выгружено альбомов: <code>{total_raw}</code>.\n"
-        msg += "Но ни один релиз не прошел жанровый фильтр-очистку от трэша/дэта."
-    else:
-        msg = f"<b>🇳🇴 ЕЖЕНЕДЕЛЬНЫЙ БЛЭК-МЕТАЛ УЛОВ С BANDCAMP ({months_ru[now.month]} {now.year})</b>\n\n"
-        for r in releases:
-            # Предохранитель на случай если url пришел в виде списка строк
-            final_url = r['url'][0] if isinstance(r['url'], list) else r['url']
-            msg += f"• <code>{r['artist']} - {r['title']}</code>\n🔗 {final_url}\n\n"
-
-    if not BOT_TOKEN:
+        msg = "<b>🇳🇴 БЛЭК-МЕТАЛ ПАРСЕР (MICRO SHIELD)</b>\n\nМикро-шлюз ответил успешно, но по ключевым фразам блэк-метал альбомов не найдено."
+        telegram_url = f"{BASE_TG}{BOT_TOKEN}{S}sendMessage"
+        requests.post(telegram_url, json={"chat_id": ADMIN_CHAT_ID, "text": msg, "parse_mode": "HTML"})
         return
+
+    # Собираем итоговое текстовое сообщение строго по твоему шаблону!
+    msg = ""
+    for r in releases:
+        msg += f"<code>{r['artist']} - {r['title']} ({r['year']})</code>\n"
+        msg += f"{r['flag']} {r['genre']}\n"
+        msg += f"{r['youtube']} {r['month']}\n"
+        msg += "---\n" # Твой разделитель между релизами
 
     telegram_url = f"{BASE_TG}{BOT_TOKEN}{S}sendMessage"
     payload = {
@@ -138,6 +125,6 @@ def send_to_telegram(releases, total_raw):
     requests.post(telegram_url, json=payload)
 
 if __name__ == "__main__":
-    results, raw_count = parse_bandcamp_via_proxy()
-    send_to_telegram(results, raw_count)
+    results = parse_bandcamp_micro_api()
+    send_to_telegram(results)
     
