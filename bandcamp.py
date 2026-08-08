@@ -9,10 +9,8 @@ d = chr(46)
 c = chr(58)
 s = chr(47)
 
-# Посимвольная сборка неблокируемого шлюза виджетов: https://bandcamp.com
+# Посимвольная сборка шлюза виджетов: https://bandcamp.com
 EMBED_DOM = f"https{c}{s}{s}bandcamp{d}com{s}EmbeddedPlayer"
-
-# Базовый адрес отправки сообщений Telegram: https://telegram.org
 BASE_TG = f"https{c}{s}{s}api{d}telegram{d}org{s}bot"
 
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -74,26 +72,10 @@ def parse_bandcamp_embedded_perfect():
                     
                 debug_log["total_parsed_items"] += 1
                 
-                if len(debug_log["sample_titles"]) DIAGNOSTIC LOG EMBEDDED PLAYER</b>\n\n"
-    msg += f"<b>METRICS:</b>\n"
-    msg += f"• Bandcamp status: <code>{debug_log['status_code']}</code>\n"
-    msg += f"• HTML length: <code>{debug_log['raw_text_length']}</code>\n"
-    msg += f"• Total items found: <code>{debug_log['total_parsed_items']}</code>\n"
-    msg += f"• Skipped by filter: <code>{debug_log['skipped_by_filters']}</code>\n"
-    msg += f"• Raw player lines: <code>[{samples_str}]</code>\n"
-    if debug_log["error_message"]:
-        msg += f"• Code error: <code>{debug_log['error_message']}</code>\n"
-    msg += "\n"
-    
-    if not releases:
-        msg += "RESULT: No black metal releases detected inside widget."
-    else:
-        msg += "NEW RELEASES FROM BANDCAMP:\n\n"
-        for r in releases:
-            msg += f"<code>{r['artist']} - {r['title']} ({r['year']})</code>\n"
-            msg += f"Genre: {r['genre']}\n"
-            msg += f"https{c}{s}{s}youtube{d}com {r['month']}\n"
-            msg += "---\n"
+                if len(debug_log["sample_titles"]) {r['artist']} - {r['title']} ({r['year']})</code>\n"
+        msg += f"Genre: {r['genre']}\n"
+        msg += f"https{c}{s}{s}youtube{d}com {r['month']}\n"
+        msg += "---\n"
 
     telegram_url = f"{BASE_TG}{BOT_TOKEN}{s}sendMessage"
     payload = {
