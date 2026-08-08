@@ -1,20 +1,16 @@
 import os
 import json
-import xml.etree.ElementTree as ET
 from datetime import datetime
 import requests
+from bs4 import BeautifulSoup
 
-# Жесткое правило: сборка служебных символов через ASCII
-# d = '.', c = ':', s = '/'
+# Строгое архитектурное правило: сборка служебных знаков через ASCII
 d = chr(46)
 c = chr(58)
 s = chr(47)
 
-# Посимвольная монолитная сборка прокси-домена: https://codetabs.com
-PROXY_DOM = f"https{c}{s}{s}api{d}codetabs{d}com{s}cors-proxy{s}"
-
-# Все слеши строго маленькой буквой {s}: https://bandcamp.com
-FEED_DOM = f"https{c}{s}{s}bandcamp{d}com{s}feed{s}tag{s}"
+# Посимвольная сборка неблокируемого шлюза виджетов: https://bandcamp.com
+EMBED_DOM = f"https{c}{s}{s}bandcamp{d}com{s}EmbeddedPlayer"
 
 # Базовый адрес отправки сообщений Telegram: https://telegram.org
 BASE_TG = f"https{c}{s}{s}api{d}telegram{d}org{s}bot"
@@ -37,16 +33,16 @@ COUNTRY_FLAGS = {
     "iceland": "🇮🇸", "greece": "🇬🇷", "russia": "🇷🇺", "united kingdom": "🇬🇧"
 }
 
-def parse_bandcamp_rss_cascade():
+def parse_bandcamp_embedded_perfect():
     now = datetime.now()
     found_releases = []
-    seen_urls = set()
+    seen_identities = set()
     
-    # Карта отладки (Имя ключа строго зафиксировано как 'sample_titles')
+    # Карта отладки (ВСЕГДА отправляется в Telegram)
     debug_log = {
         "status_code": 0,
         "raw_text_length": 0,
-        "total_xml_entries": 0,
+        "total_parsed_items": 0,
         "skipped_by_filters": 0,
         "error_message": "",
         "sample_titles": []
@@ -56,13 +52,15 @@ def parse_bandcamp_rss_cascade():
     month_tag = months_en[now.month]
     current_year = str(now.year)
 
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+
     for tag in BLACK_METAL_TAGS:
-        target_url = f"{FEED_DOM}{tag}"
-        full_proxy_url = f"{PROXY_DOM}{target_url}"
-        
+        # v=2 — это параметр, запрашивающий сетку со свежими релизами внутри плеера
+        params = {"tag": tag, "v": "2"}
         try:
-            headers = {"User-Agent": "Mozilla/5.0"}
-            res = requests.get(full_proxy_url, headers=headers, timeout=20)
+            res = requests.get(EMBED_DOM, params=params, headers=headers, timeout=15)
             
             if debug_log["status_code"] == 0:
                 debug_log["status_code"] = res.status_code
@@ -71,90 +69,45 @@ def parse_bandcamp_rss_cascade():
             if res.status_code != 200 or not res.text:
                 continue
                 
-            root = ET.fromstring(res.text)
-            ns = {'atom': 'http://w3.org'}
-            entries = root.findall('atom:entry', ns)
+            soup = BeautifulSoup(res.text, "html.parser")
             
-            debug_log["total_xml_entries"] += len(entries)
+            # Внутри верстки плеера альбомы всегда лежат в блоках art-link или visual
+            artworks = soup.find_all("div", class_="visual") or soup.find_all("a", class_="art-link") or soup.find_all("img")
             
-            for entry in entries:
-                title_tag = entry.find('atom:title', ns)
-                link_tag = entry.find('atom:link', ns)
-                
-                if title_tag is None or link_tag is None:
+            for art in artworks:
+                img_tag = art if art.name == "img" else art.find("img")
+                if not img_tag or not img_tag.has_attr("alt"):
                     continue
                     
-                title_text = title_tag.text.strip()
-                album_url = link_tag.attrib.get('href', '')
-                
-                if not album_url or album_url in seen_urls:
+                # Названия зашиты в атрибут alt картинок в формате "Album Name by Band Name"
+                album_info = img_tag["alt"].strip()
+                if not album_info or " by " not in album_info:
                     continue
                     
-                if len(debug_log["sample_titles"]) < 3:
-                    debug_log["sample_titles"].append(title_text[:40])
-
-                if any(forbidden in title_text.lower() for forbidden in FORBIDDEN_KEYWORDS):
-                    debug_log["skipped_by_filters"] += 1
-                    continue
-
-                if " by " in title_text:
-                    title, artist = title_text.rsplit(" by ", 1)
-                else:
-                    title, artist = title_text, "Underground Artist"
-
-                flag = "🇳🇴"  # Тру-дефолт
-                summary_tag = entry.find('atom:summary', ns)
-                summary_text = summary_tag.text.lower() if summary_tag is not None else ""
+                debug_log["total_parsed_items"] += 1
                 
-                for c_key, c_flag in COUNTRY_FLAGS.items():
-                    if c_key in summary_text or c_key in title_text.lower():
-                        flag = c_flag
-                        break
-
-                genre_text = tag.replace("-", " ").title()
-
-                found_releases.append({
-                    "artist": artist.strip(),
-                    "title": title.strip(),
-                    "year": current_year,
-                    "flag": flag,
-                    "genre": genre_text,
-                    "month": month_tag
-                })
-                seen_urls.add(album_url)
-
-        except Exception as e:
-            if not debug_log["error_message"]:
-                debug_log["error_message"] = str(e)
-            continue
-            
-    return found_releases[:15], debug_log
-
-def send_to_telegram(releases, debug_log):
-    # ИСПРАВЛЕНО: Ключ извлечения строго синхронизирован с debug_log['sample_titles']
-    samples_str = ", ".join([f"'{t}'" for t in debug_log["sample_titles"]])
-    
-    msg = f"<b>🔎 ПОСТОЯННЫЙ ЛОГ ОТЛАДКИ RSS-FEED</b>\n\n"
+                if len(debug_log["sample_titles"]) 🔎 ПОСТОЯННЫЙ ЛОГ ОТЛАДКИ EMBEDDED PLAYER</b>\n\n"
     msg += f"<b>📊 Метрики шлюза:</b>\n"
-    msg += f"• Код ответа прокси: <code>{debug_log['status_code']}</code>\n"
-    msg += f"• Получено символов XML: <code>{debug_log['raw_text_length']}</code>\n"
-    msg += f"• Записей найдено в фидах: <code>{debug_log['total_xml_entries']}</code>\n"
+    msg += f"• Код ответа Bandcamp: <code>{debug_log['status_code']}</code>\n"
+    msg += f"• Получено символов HTML: <code>{debug_log['raw_text_length']}</code>\n"
+    msg += f"• Элементов найдено в верстке: <code>{debug_log['total_parsed_items']}</code>\n"
     msg += f"• Отсеяно фильтром поджанров: <code>{debug_log['skipped_by_filters']}</code>\n"
-    msg += f"• Что прислал фид (сырые строки): <code>[{samples_str}]</code>\n"
+    msg += f"• Что прислал плеер (сырые строки): <code>[{samples_str}]</code>\n"
     if debug_log["error_message"]:
         msg += f"• Ошибка внутри кода: <code>{debug_log['error_message']}</code>\n"
     msg += "\n"
     
     if not releases:
-        msg += "❌ <b>Результат фильтра:</b> Живых блэк-метал новинок по критериям в фиде не обнаружено."
+        msg += "❌ <b>Результат фильтра:</b> Живых блэк-метал новинок внутри виджета не распознано."
     else:
         msg += "🔥 <b>НОВЫЕ ЖИВЫЕ РЕЛИЗЫ С BANDCAMP:</b>\n\n"
         for r in releases:
             msg += f"<code>{r['artist']} - {r['title']} ({r['year']})</code>\n"
             msg += f"{r['flag']} {r['genre']}\n"
-            msg += f"https{c}{s}{s}youtube{d}com {r['month']}\n"
+            msg += f"https{c}{s}{s}youtube{d}com {r['month']}\n"  # Твой жесткий формат ссылки-заглушки!
             msg += "---\n"
 
+    # Безопасная склейка адреса отправки Telegram
     telegram_url = f"{BASE_TG}{BOT_TOKEN}{s}sendMessage"
     payload = {
         "chat_id": ADMIN_CHAT_ID,
@@ -165,6 +118,6 @@ def send_to_telegram(releases, debug_log):
     requests.post(telegram_url, json=payload)
 
 if __name__ == "__main__":
-    results, log_data = parse_bandcamp_rss_cascade()
+    results, log_data = parse_bandcamp_embedded_perfect()
     send_to_telegram(results, log_data)
     
