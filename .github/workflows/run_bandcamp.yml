@@ -20,49 +20,60 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4 curl_cffi typing_extensions
 
-      # ШАГ 8.4: Точечная проверка официального GraphQL API шлюза Bandcamp
+      # ШАГ 8.5: Ищем точные текстовые маркеры музыкальной сетки внутри HTML страницы
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
-          import json
+          import re
           from curl_cffi import requests as cloud_requests
 
-          # Единый современный шлюз данных Bandcamp GraphQL
-          URL_API = "https://bandcamp.com"
-          
+          URL_TAG = "https://bandcamp.com"
           HEADERS = {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-              "Content-Type": "application/json"
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 8.4 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 8.5 ---")
           try:
-              # Базовый GraphQL запрос для получения списка релизов по тегу black-metal
-              payload = {
-                  "query": "query GetTagItems($tag: String!, $sort: String!, $page: Int!) { tag_items(tag: $tag, sort: $sort, page: $page) { id name artist_name } }",
-                  "variables": {
-                      "tag": "black-metal",
-                      "sort": "date",
-                      "page": 1
-                  }
-              }
+              res = cloud_requests.get(URL_TAG, headers=HEADERS, impersonate="chrome110", timeout=20)
+              print(f"1. Код ответа Bandcamp: {res.status_code}")
+              print(f"2. Количество символов на странице: {len(res.text)}")
               
-              res = cloud_requests.post(URL_API, json=payload, headers=HEADERS, impersonate="chrome110", timeout=20)
-              print(f"1. Код ответа GraphQL API: {res.status_code}")
-              print(f"2. Количество символов в ответе шлюза: {len(res.text)}")
-              
-              if res.status_code == 200 and len(res.text) > 0:
-                  clean_sample = res.text[:300].replace("<", "&lt;").replace(">", "&gt;")
-                  print(f"3. Сырой срез ответа GraphQL: {clean_sample}")
-              else:
-                  print(f"3. Шлюз ответил отказом. Текст ошибки: {res.text[:200]}")
+              if res.status_code == 200 and len(res.text) > 1000:
+                  html = res.text
                   
+                  # Проверяем маркер 1: data-initial-items
+                  if "data-initial-items" in html:
+                      print("3. НАЙДЕН МАРКЕР: data-initial-items присутствует в HTML!")
+                      idx = html.find("data-initial-items")
+                      print(f"   -> Срез кода вокруг маркера: {html[idx:idx+150]}")
+                  
+                  # Проверяем маркер 2: data-items
+                  if "data-items" in html:
+                      print("4. НАЙДЕН МАРКЕР: data-items присутствует в HTML!")
+                      idx = html.find("data-items")
+                      print(f"   -> Срез кода вокруг маркера: {html[idx:idx+150]}")
+                      
+                  # Проверяем маркер 3: id="music-grid" или классы сеток
+                  if "music-grid" in html or "dig-deeper" in html:
+                      print("5. НАЙДЕНЫ СИСТЕМНЫЕ КЛАССЫ СЕТОК (music-grid/dig-deeper)!")
+                      
+                  # Проверим сколько раз вообще в коде страницы встречается слово "album/" в ссылках
+                  album_matches = len(re.findall(r'href="[^"]*/album/[^"]*"', html))
+                  print(f"6. Всего прямых ссылок на альбомы в коде страницы: {album_matches}")
+                  
+                  if album_matches > 0:
+                      print("\n7. Примеры первых 3 найденных ссылок на альбомы:")
+                      links = re.findall(r'href="([^"]*/album/[^"]*)"', html)
+                      for l in links[:3]:
+                          print(f"   -> Ссылка: {l}")
+              else:
+                  print("3. СБОЙ: Страница пуста.")
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 8.4: {e}")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 8.5: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем точечный тест GraphQL
+      # Запускаем поиск маркеров сетки
       - name: Run Token API Test
         run: python test_metal.py
         
