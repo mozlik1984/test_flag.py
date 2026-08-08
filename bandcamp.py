@@ -35,10 +35,7 @@ def parse_bandcamp_via_proxy():
     total_raw_items = 0
 
     for tag in BLACK_METAL_TAGS:
-        # Формируем целевой URL Bandcamp
         target_url = f"https{C}{S}{S}bandcamp.com{S}tag{S}{tag}"
-        
-        # Оборачиваем его в прокси-шлюз, который скроет GitHub от систем защиты Cloudflare
         encoded_url = urllib.parse.quote_plus(target_url)
         full_proxy_url = f"{PROXY_GATEWAY}{encoded_url}"
         
@@ -48,7 +45,6 @@ def parse_bandcamp_via_proxy():
                 print(f"Шлюз прокси для тега {tag} вернул ошибку {res.status_code}")
                 continue
                 
-            # Извлекаем чистый HTML из ответа прокси-сервера
             payload_data = res.json()
             html_content = payload_data.get("contents", "")
             
@@ -56,8 +52,6 @@ def parse_bandcamp_via_proxy():
                 continue
                 
             soup = BeautifulSoup(html_content, "html.parser")
-            
-            # Находим заветный тег со встроенным JSON, который мы искали с самого начала!
             pagedata_tag = soup.find("div", id="pagedata") or soup.find("script", {"id": "pagedata"})
             if not pagedata_tag:
                 continue
@@ -75,23 +69,21 @@ def parse_bandcamp_via_proxy():
                 if not album_url or album_url in seen_urls:
                     continue
                     
-                # Фильтрация поджанров (отсекаем чистый дэт/трэш/хэви)
                 item_tags = [t.lower() for t in item.get("tags", [])]
                 if any(forbidden in item_tags for forbidden in FORBIDDEN_TAGS):
                     continue
                 
-                # Проверка даты релиза (Берем строго Июль и Август 2026 для обкатки)
                 rel_date_str = item.get("release_date")
                 is_target_period = False
                 
                 if rel_date_str:
                     try:
-                        # Формат даты в JSON Bandcamp: "05 Aug 2026"
                         rel_date = datetime.strptime(rel_date_str, "%d %b %Y")
-                        if rel_date.year == 2026 and rel_date.month in:
+                        # ЖЕЛЕЗОБЕТОННАЯ ПРОВЕРКА: Июль и Август через знак больше
+                        if rel_date.year == 2026 and rel_date.month > 6:
                             is_target_period = True
                     except Exception:
-                        is_target_period = True # Если формат изменился — забираем, чтобы не потерять
+                        is_target_period = True
                 else:
                     is_target_period = True
 
