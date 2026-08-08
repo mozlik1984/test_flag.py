@@ -20,7 +20,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4 curl_cffi typing_extensions
 
-      # ШАГ 7.3: Вскрываем pageContext, чтобы найти точную папку с альбомами
+      # ШАГ 7.4: Полное сканирование содержимого appData на массивы альбомов
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
@@ -33,7 +33,7 @@ jobs:
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 7.3 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 7.4 ---")
           try:
               res = cloud_requests.get(URL_RSS, headers=HEADERS, impersonate="chrome110", timeout=20)
               
@@ -49,26 +49,34 @@ jobs:
                       clean_blob = html.unescape(raw_blob)
                       data = json.loads(clean_blob)
                       
-                      # Вскрываем второй главный блок — pageContext
-                      page_context = data.get("pageContext", {})
-                      print("1. УСПЕХ: Блок pageContext извлечен!")
-                      print(f"2. Подразделы внутри pageContext: {list(page_context.keys())}")
+                      # Вскрываем appData на полную глубину
+                      app_data = data.get("appData", {})
+                      print("1. УСПЕХ: Секция appData полностью извлечена!")
+                      print(f"2. Все доступные ключи внутри appData: {list(app_data.keys())}")
                       
-                      # Проверяем, нет ли там ключей вроде 'tag_name', 'hub_id' или списков данных
-                      for key in page_context.keys():
-                          val = page_context[key]
+                      print("\n3. Анализ типов данных и структуры подблоков:")
+                      for key in app_data.keys():
+                          val = app_data[key]
                           if isinstance(val, list):
                               print(f"   -> Обнаружен СПИСОК '{key}' длиной {len(val)} элементов!")
                           elif isinstance(val, dict):
-                              print(f"   -> Обнаружен СЛОВАРЬ '{key}' с ключами: {list(val.keys())[:4]}")
+                              # Если это словарь, смотрим его внутренние подразделы (например, hub, tag)
+                              print(f"   -> Обнаружен СЛОВАРЬ '{key}' с ключами: {list(val.keys())[:5]}")
+                              
+                              # Заглядываем на один уровень глубже в поисковые блоки
+                              for sub_key in val.keys():
+                                  if isinstance(val[sub_key], list) and len(val[sub_key]) > 0:
+                                      print(f"      * Внутри '{key}' найден вложенный СПИСОК '{sub_key}' ({len(val[sub_key])} элементов)")
+                                  elif isinstance(val[sub_key], dict):
+                                      print(f"      * Внутри '{key}' найден вложенный СЛОВАРЬ '{sub_key}' с ключами: {list(val[sub_key].keys())[:3]}")
                   else:
                       print("СБОЙ: data-blob не найден.")
           except Exception as e:
-              print(f"ОШИБКА НА ШАГЕ 7.3: {e}")
+              print(f"ОШИБКА НА ШАГЕ 7.4: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем анализ pageContext
+      # Запускаем глубокий анализ appData
       - name: Run JSON Decode Test
         run: python test_metal.py
         
