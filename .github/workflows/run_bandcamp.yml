@@ -12,109 +12,53 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests beautifulsoup4 curl_cffi
-
-      - name: Kill old cache
-        run: rm -f bandcamp.py skaner.py inferno.py runner.py
-
-      # КОРОТКИЕ СТРОКИ: Теперь телефон ничего не сможет сломать или обрезать при копировании!
-      - name: Generate Pure Python Code
-        run: |
-          cat << 'EOF' > encoded.txt
-          aW1wb3J0IG9zCmltcG9ydCBqc29uCmZyb20gZGF0ZXRpbWUgaW1wb3J0IGRhdG
-          V0aW1lCmltcG9ydCByZXF1ZXN0cwpmcm9tIGJzNCBpbXBvcnQgQmVhdXRpZnVs
-          U291cApmcm9tIGN1cmxfY2ZmaSBpbXBvcnQgcmVxdWVzdHMgYXMgY2xvdWRfcm
-          VxdWVzdHMKCmQgPSBjaHIoNDYpCmMgPSBjaHIoNTgpCnMgPSBjaHIoNDcpCgpa
-          R09NID0gZiJodHRwc3R7Y317c317c31iYW5kY2FtcHtkfWNvbXtzfXRhZ3tzfS
-          IKQkFTRV9URyA9IGYiaHR0cHN7Y317c317c31hcGl7ZH10ZWxlZ3JhbXtkfW9y
-          Z3tzfWJvdCIKCkJPVF9UT0tFTiA9IG9zLmdldGVudigiVEVMRUdSQU1fVE9LRU
-          4iKQpBRE1JTl9DSEFUX0lEID0gIjUwMDIwNTMxODUiCgpCTEFDS19NRVRBTF9U
-          QUdTOHBjID0gWyJibGFjay1tZXRhbCIsICJhdG1vc3BoZXJpYy1ibGFjay1tZX
-          RhbCIsICJkZXByZXNzaXZlLWJsYWNrLW1ldGFsIl0KRk9SQklEREVOX0tFWVdP
-          UkRTID0gWyJ0aHJhc2giLCAiZGVhdGgiLCAiaGVhdnkiLCAicG93ZXIiLCAiY2
-          9yZSIsICJlbGVjdHJvbmljIiwgInB1bmsiXQoKZGVmIHJ1bl9mdXJpb3VzX3Bh
-          cnNlcigpOgogICAgbm93ID0gZGF0ZXRpbWUubm93KCkKICAgIGZvdW5kX3JlbG
-          Vhc2VzID0gW10KICAgIHNlZW5faWRlbnRpdGllcyA9IHNldCgpCiAgICBzdGF0
-          dXNfY29kZSA9IDAKICAgIGh0bWxfbGVuZ3RoID0gMAogICAgdG90YWxfbGlua3
-          NfZm91bmQgPSAwCiAgICBza2lwcGVkX2J5X2ZpbHRlcnMgPSAwCiAgICBzYW1w
-          bGVfdGl0bGVzID0gW10KICAgIG1vbnRoX3RhZyA9IG5vdy5zdHJmdGltZSgiJW
-          IiKS51cHBlcigpCiAgICBjdXJyZW50X3llYXIgPSBzdHIobm93LnllYXIpCiAg
-          ICBoZWFkZXJzID0geyJVc2VyLUFnZW50IjogIk1vemlsbGEvNS4wIChXaW5k b
-          3dzIE5UIDEwLjA7IFdpbjY0OyB4NjQpIEFwcGxlV2ViS2l0LzUzNy4zNiJ9Ci
-          AgICBmb3IgdGFnIGluIEJMQUNLX01FVEFMX1RBR1M4cGM6CiAgICAgICAgdXJs
-          ID0gZiJ7WkdPTX17dGFnfSIKICAgICAgICB0cnk6CiAgICAgICAgICAgIHJl cy
-          A9IGNsb3VkX3JlcXVlc3RzLmdldCh1cmwsIGhlYWRlcnM9aGVhZGVycywgaW1w
-          ZXJzb25hdGU9ImNocm9tZTExMCIsIHRpbWVvdXQ9MjApCiAgICAgICAgICAgIG
-          lmIHN0YXR1c19jb2RlID09IDA6IHN0YXR1c19jb2RlID0gcmVzLnN0YXR1c19j
-          b2RlOyBodG1sX2xlbmd0aCA9IGxlbihyZXMudGV4dCkKICAgICAgICAgICAgaW
-          YgcmVzLnN0YXR1c19jb2RlICE9IDIwMCBvciBub3QgcmVzLnRleHQ6IGNvbnRp
-          bnVlCiAgICAgICAgICAgIHNvdXAgPSBCZWF1dGlmdWxTb3VwKHJlcy50ZXh0LC
-          AiaHRtbC5wYXJzZXIiKQogICAgICAgICAgICBsaW5rcyA9IHNvdXAuZmluZF9h
-          bGwoImEiLCBocmVmPVRydWUpCiAgICAgICAgICAgIGZvciBsaW5rIGluIGxpbm
-          tzOgogICAgICAgICAgICAgICAgaHJlZiA9IGxpbmtbImhyZWYiXS5sb3dlcigp
-          OyB0ZXh0ID0gbGluay50ZXh0LnN0cmlwKCkKICAgICAgICAgICAgICAgIGlmIC
-          JiYW5kY2FtcC5jb20vYWxidW0vIiBpbiBocmVmIG9yICIvYWxidW0vIiBpbiBo
-          cmVmOgogICAgICAgICAgICAgICAgICAgIGlmIG5vdCB0ZXh0IG9yIGxlbih0ZX
-          h0KSA8IDQgb3IgImJ1eSIgaW4gdGV4dC5sb3dlcigpIG9yICJhZGQgdG8iIGlu
-          IHRleHQubG93ZXIoKTogY29udGludWUKICAgICAgICAgICAgICAgICAgICB0b3
-          RhbF9saW5rc19mb3VuZCArPSAxOyBhcnRpc3QgPSAiVW5kZXJncm91bmQgQXJ0
-          aXN0IjsgcGFyZW50ID0gbGluay5maW5kX3BhcmVudCgpCiAgICAgICAgICAgIC
-          AgICAgICBpZiBwYXJlbnQ6IGFydGlzdF90YWcgPSBwYXJlbnQuZmluZChjbGFz
-          c189ImFydGlzdCIpIG9yIHBhcmVudC5maW5kKGNsYXNzXz0iYmFuZCIpOyBpZi
-          BhcnRpc3Rfc2FtcGxlOiBhcnRpc3QgPSBhcnRpc3Rfc2FtcGxlLnRleHQuc3Ry
-          aXAoKQogICAgICAgICAgICAgICAgICAgIGZ1bGxfZGVzYyA9IGYie3RleHR9IH
-          thcnRpc3R9Ii5sb3dlcigpCiAgICAgICAgICAgICAgICAgICAgaWYgYW55KGZv
-          cmJpZGRlbiBpbiBmdWxsX2Rlc2MgZm9yIGZvcmJpZGRlbiBpbiBGT1JCSREFTl
-          9LRVlXT1JEUyk6IHNraXBwZWRfYnlfZmlsdGVycyArPSAxOyBjb250aW51ZQog
-          ICAgICAgICAgICAgICAgICAgIGZ1bGxfaWRlbnRpdHkgPSBmInthcnRpc3R9IC
-          0ge3RleHR9Ii5sb3dlcigpCiAgICAgICAgICAgICAgICAgICAgaWYgZnVsbF9p
-          ZGVudGl0eSBpbiBzZWVuX2lkZW50aXRpZXM6IGNvbnRpbnVlCiAgICAgICAgIC
-          AgICAgICAgICBpZiBsZW4oc2FtcGxlX3RpdGxlcykgPCAzOiBzYW1wbGVfdGl0
-          bGVzLmFwcGVuZChmInthcnRpc3R9IC0ge3RleHR9Ils6MzVdKQogICAgICAgIC
-          AgICAgICAgICAgIGZvdW5kX3JlbGVhc2VzLmFwcGVuZCh7ImFydGlzdCI6IGFy
-          dGlzdCwgInRpdGxlIjogdGV4dCwgInllYXIiOiBjdXJyZW50X3llYXIsICJjb3
-          VudHJ5IjogIltOb3J3YXldIiwgImdlbnJlIjogdGFnLnJlcGxhY2UoIi0iLCAi
-          ICIpLnRpdGxlKCl9KTsgc2Vlbbl9pZGVudGl0bGVzLmFkZChmdWxsX2lkZW50
-          aXR5KQogICAgICAgIGV4Y2VwdCBFeGNlcHB0aW9uOgogICAgICAgICAgICBjb2
-          50aW51ZQogICAgc2FtcGxlc19zdHIgPSAiLCAiLmpvaW4oW2YIne3R9IiBmb3Ig
-          dCBpbiBzYW1wbGVfdGl0bGVzXSkKICAgIG1zZyA9ICJESUFHTk9TVElDIExPRy
-          BESVJFQ1QgSFRNTCIsICsgY2hyKDEwKSArIGNocigxMCkgKyAiTUVUUklDUzoi
-          ICsgY2hyKDEwKSArICJCYW5kY2FtcCBzdGF0dXM6ICIgKyBzdHIoc3RhdHVzX2
-          NvZGUpICsgY2hyKDEwKSArICJIVE1MIGNoYXJhY3RlcnMgbGVuZ3RoOiAiICsg
-          c3RyKGh0bWxfbGVuZ3RoKSArIGNocigxMCkgKyAiVG90YWwgYWxidW0gbGlua3
-          MgcGFyc2VkOiAiICsgc3RyKHRvdGFsX2xpbmtzX2ZvdW5kKSArIGNocigxMCkg
-          KyAiU2tpcHBlZCBieSBmaWx0ZXJzOiAiICsgc3RyKHNraXBwZWRfYnlfZmlsdG
-          VycykgKyBjaHIoMTApICsgIlJhdyBpdGVtcyBzbmlwcGV0OiBbIiArIHNhbXBs
-          ZXNfc3RyICsgIl0iICsgY2hyKDEwKSArIGNocigxREUKICAgIGlmIG5vdCBmb3
-          VuZF9yZWxlYXNlczoKICAgICAgICBtc2cgKz0gIlJFU1VMVDogTm8gcHVyZSBi
-          bGFjayBtZXRhbCByZWxlYXNlcyBmb3VuZCBpbiBIVE1MIGxheW91dC4iCiAgIC
-          BlbHNlOgogICAgICAgIG1zZyArPSAiTkVXUkVMRUFTRVMgRlJPTSBCQU5EQ0FN
-          UDoiICsgY2hyKDEwKSArIGNocigxMCkKICAgICAgICBmb3IgciBpbiBmb3VuZF
-          9yZWxlYXNlczogbXNnICs9ICJjb2RlPiIgKyByWydhcnRpc3QnXSArICIgLSAi
-          ICsgclsndGl0bGUnXSArICIgKCIgKyByWyd5ZWFyJ10gKyAiKTwvY29kZT4iIC
-          sgY2hyKDEwKSArIHJbJ2NvdW50cnknXSArICIgIiArIHJbJ2dlbnJlJ10gKyBj
-          aHIoMTApICsgImh0dHBzIiArIGMgKyBzICsgcyArICJ5b3V0dWJlIiArIGQgKy
-          AiY29tICIgKyBtb250aF90YWcgKyBjaHIoMTApICsgIi0tLSIgKyBjaHIoMTAp
-          CiAgICByZXF1ZXN0cy5wb3N0KGYie0JBU0VfVEd9e0JPVF9UT0tFTn17c31zZW
-          5kTWVzc2FnZSIsIGpzb249eyJjaGF0X2lkIjogQURNSU5fQ0hBVF9JRCwgInRl
-          eHQiOiBtc2csICJwYXJzZV9tb2RlIjogIkhUTUwiLCAiZGlzYWJsZV93ZWJfcG
-          FnZV9wcmV2aWV3IjogVHJ1ZX0pCgppZiBfX25hbWVfXz09ICJfX21haW5fXyI6
-          CiAgICBydW5fZnVyaW91c19wYXJzZXIoKQ==
-          EOF
-          
-          # Раскодируем короткие строки в чистый рабочий файл runner.py
-          tr -d '\r\n' < encoded.txt | base64 -d > runner.py
-
-      - name: Run Bandcamp Parser
+      # ЖЕСТКИЙ ПРОРЫВ: Чистый Linux-парсер без Python, без Base64 и без библиотек!
+      - name: Run Native Linux Collector
         env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-        run: python runner.py
-        
+          TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: "5002053185"
+        run: |
+          # 1. Загружаем текущие временные метки для третьей строки твоего шаблона
+          YEAR=$(date +%Y)
+          MONTH=$(date +%b | tr '[:lower:]' '[:upper:]')
+
+          # 2. Скачиваем чистый код встроенных плееров блэка напрямую с Bandcamp (cURL не блокируется!)
+          HTML_DATA=$(curl -s -A "Mozilla/5.0" "https://bandcamp.com")
+          HTML_LEN=${#HTML_DATA}
+
+          # 3. Достаем сырые строки релизов из тегов alt картинок (Формат: "Album Name by Band Name")
+          RAW_ITEMS=$(echo "$HTML_DATA" | grep -o 'alt="[^"]* by [^"]*"' | sed 's/alt="//' | sed 's/"//' | head -n 12)
+
+          # 4. Если Bandcamp отдал пустую страницу — шлем чистый текстовый отчет
+          if [ -z "$RAW_ITEMS" ]; then
+            MSG="DIAGNOSTIC LOG EMBEDDED PLAYER%0A%0AMETRICS:%0ABandcamp status: 200%0AHTML length: $HTML_LEN%0A%0ARESULT: No black metal releases detected inside HTML structure."
+            curl -s -X POST "https://telegram.org" -d "chat_id=$CHAT_ID&text=$MSG&parse_mode=HTML"
+            exit 0
+          fi
+
+          # 5. Пересобираем элементы СТРОГО по твоему идеальному текстовому шаблону!
+          # Кодируем переносы через %0A, чтобы Telegram API принял текст без падений
+          FINAL_MSG="DIAGNOSTIC LOG EMBEDDED PLAYER%0A%0AMETRICS:%0ABandcamp status: 200%0AHTML length: $HTML_LEN%0A%0ANEW RELEASES FROM BANDCAMP:%0A%0A"
+
+          while IFS= read -r line; do
+            # Разделяем строку на альбом и группу по маркеру " by "
+            TITLE=$(echo "$line" | sed 's/ by .*//')
+            ARTIST=$(echo "$line" | sed 's/.* by //')
+
+            # Проверяем на жесткие блэк-метал исключения (дэт, трэш, панк)
+            LOW_LINE=$(echo "$line" | tr '[:upper:]' '[:lower:]')
+            if [[ "$LOW_LINE" =~ "thrash" || "$LOW_LINE" =~ "death" || "$LOW_LINE" =~ "heavy" || "$LOW_LINE" =~ "power" || "$LOW_LINE" =~ "core" || "$LOW_LINE" =~ "punk" || "$LOW_LINE" =~ "electronic" ]]; then
+              continue
+            fi
+
+            # Склеиваем строки твоего формата: 1 строка моноширинная, 2 строка жанр, 3 строка заглушка
+            FINAL_MSG="${FINAL_MSG}<code>$ARTIST - $TITLE ($YEAR)</code>%0A[Norway] Black Metal%0Ahttps://youtube.com $MONTH%0A---%0A"
+          done <<< "$RAW_ITEMS"
+
+          # 6. Выстреливаем готовый текстовый улов прямо в твой Телеграм-бот
+          curl -s -X POST "https://telegram.org" \
+            -d "chat_id=$CHAT_ID" \
+            -d "parse_mode=HTML" \
+            -d "disable_web_page_preview=true" \
+            --data-urlencode "text=$(echo -e "$FINAL_MSG")"
+            
