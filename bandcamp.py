@@ -1,10 +1,16 @@
 import os
 import json
-import urllib.parse
+import time
 from datetime import datetime
 import requests
+from bs4 import BeautifulSoup
 
-# ASCII маскировка путей для Telegram
+# Настройка Selenium браузера
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
+
 C = chr(58)
 S = chr(47)
 BASE_TG = f"https{C}{S}{S}api.telegram.org{S}bot"
@@ -12,11 +18,12 @@ BASE_TG = f"https{C}{S}{S}api.telegram.org{S}bot"
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_CHAT_ID = "5002053185"
 
-# Используем AllOrigins в GET-режиме (он кеширует ответы, обходя Cloudflare на 100%)
-PROXY_URL = f"https{C}{S}{S}api.allorigins.win{S}get?url="
+BLACK_METAL_TAGS = [
+    "black-metal", "atmospheric-black-metal", "depressive-black-metal", 
+    "raw-black-metal", "symphonic-black-metal", "post-black-metal", 
+    "melodic-black-metal", "blackgaze"
+]
 
-# Список блэк-метал тегов Bandcamp
-BLACK_METAL_TAGS = ["black-metal", "atmospheric-black-metal", "depressive-black-metal"]
 FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk"]
 
 COUNTRY_FLAGS = {
@@ -26,113 +33,107 @@ COUNTRY_FLAGS = {
     "iceland": "🇮🇸", "greece": "🇬🇷", "russia": "🇷🇺", "united kingdom": "🇬🇧"
 }
 
-def parse_bandcamp_final_prooriv():
+def parse_via_real_browser():
     now = datetime.now()
     found_releases = []
-    seen_identities = set()
+    seen_urls = set()
 
     months_en = {1:"JAN", 2:"FEB", 3:"MAR", 4:"APR", 5:"MAY", 6:"JUN", 7:"JUL", 8:"AUG", 9:"SEP", 10:"OCT", 11:"NOV", 12:"DEC"}
     month_tag = months_en[now.month]
     current_year = str(now.year)
 
-    for tag in BLACK_METAL_TAGS:
-        # Запрашиваем скрытый мобильный JSON-шлюз самого Bandcamp через AllOrigins прокси
-        target_url = f"https{C}{S}{S}bandcamp.com{S}api{S}hub{S}2{S}dig_deeper"
-        
-        # Передаем параметры прямо в тело GET-запроса прокси-сервера
-        payload = {
-            "tag": tag,
-            "sort_key": "date",
-            "page": 0
-        }
-        
-        try:
-            # Оборачиваем запрос к API в прокси
-            encoded_target = urllib.parse.quote_plus(target_url)
-            headers = {"User-Agent": "Mozilla/5.0"}
-            
-            # Делаем легальный GET-запрос к прокси
-            res = requests.get(f"{PROXY_URL}{encoded_target}", headers=headers, timeout=20)
-            if res.status_code != 200:
-                continue
-                
-            # AllOrigins возвращает тело ответа в виде строки в ключе 'contents'
-            raw_contents = res.json().get("contents", "")
-            if not raw_contents:
-                continue
-                
-            # Имитируем ответ мобильного API Bandcamp (так как Cloudflare его пропустил через прокси)
-            # Если прокси отдал кусок HTML или JSON, мы вытащим из него данные
-            if "hub_data" in raw_contents or "initial_results" in raw_contents:
-                data = json.loads(raw_contents)
-            else:
-                # Если мобильный шлюз вернул кастомную структуру, подстраиваемся
-                continue
+    # Опции маскировки фонового браузера Chrome
+    chrome_options = Options()
+    chrome_options.add_argument("--headless") # Запуск без экрана
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
-            items = data.get("items", []) or data.get("results", []) or data.get("hub_data", {}).get("tabs", {}).get("dig_deeper", {}).get("initial_results", [])
+    try:
+        # Инициализируем Chrome драйвер внутри Linux-контейнера GitHub
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+    except Exception as e:
+        print(f"Ошибка запуска браузера Chrome: {e}")
+        return []
+
+    for tag in BLACK_METAL_TAGS:
+        url = f"https{C}{S}{S}bandcamp.com{S}tag{S}{tag}"
+        try:
+            driver.get(url)
+            time.sleep(6) # Ждем 6 секунд, пока Cloudflare прогрузит скрипты защиты
             
-            for item in items:
-                title = item.get("title") or item.get("name") or "Unknown Album"
-                artist = item.get("artist") or item.get("artist_name") or "Unknown Artist"
-                album_url = item.get("tralbum_url") or item.get("url") or ""
+            html = driver.page_source
+            soup = BeautifulSoup(html, "html.parser")
+            
+            pagedata_tag = soup.find("div", id="pagedata") or soup.find("script", {"id": "pagedata"})
+            if not pagedata_tag:
+                continue
                 
-                full_identity = f"{artist} - {title}".lower()
-                if not album_url or full_identity in seen_identities:
+            raw_blob = pagedata_tag.get("data-blob") or pagedata_tag.text
+            if not raw_blob:
+                continue
+                
+            data = json.loads(raw_blob)
+            dig_deeper = data.get("hub_data", {}).get("tabs", {}).get("dig_deeper", {}).get("initial_results", [])
+            
+            for item in dig_deeper:
+                album_url = item.get("tralbum_url")
+                if not album_url or album_url in seen_urls:
                     continue
                     
-                # Очистка поджанров от трэша/дэта
-                item_tags = " ".join([t.lower() for t in item.get("tags", [])]) + " " + title.lower()
-                if any(forbidden in item_tags for forbidden in FORBIDDEN_KEYWORDS):
+                title = item.get("title", "Unknown Album").strip()
+                artist = item.get("artist", "Unknown Artist").strip()
+                
+                item_tags = [t.lower() for t in item.get("tags", [])]
+                genre_text = item.get("genre") or tag.replace("-", " ").title()
+                
+                full_desc_lower = f"{title} {artist} {' '.join(item_tags)}".lower()
+                if any(forbidden in full_desc_lower for forbidden in FORBIDDEN_KEYWORDS):
                     continue
-
-                # Подставляем флаг страны
-                location = item.get("artist_location", "").lower() or item.get("location", "").lower()
+                
+                location = item.get("artist_location", "").lower()
                 flag = "🇳🇴"
                 for c_key, c_flag in COUNTRY_FLAGS.items():
                     if c_key in location:
                         flag = c_flag
                         break
 
-                # Формируем ссылку на YouTube по твоему шаблону
+                # Прямая ссылка на YouTube без ASCII костылей — теперь она будет монолитной!
                 youtube_query = f"{artist} {title}".replace(" ", "+")
-                youtube_link = f"://youtube.com{S}results?search_query={youtube_query}"
-
-                genre_text = tag.replace("-", " ").title()
+                youtube_link = f"https://youtube.com{youtube_query}"
 
                 found_releases.append({
-                    "artist": artist.strip(),
-                    "title": title.strip(),
+                    "artist": artist,
+                    "title": title,
                     "year": current_year,
                     "flag": flag,
                     "genre": genre_text,
                     "youtube": youtube_link,
                     "month": month_tag
                 })
-                seen_identities.add(full_identity)
+                seen_urls.add(album_url)
 
         except Exception as e:
-            print(f"Ошибка парсинга: {e}")
+            print(f"Ошибка обработки тега {tag}: {e}")
             continue
-
-    # Если бэкэнд Bandcamp выдать не удалось, мы подсунем легальный свежий андеграунд-список,
-    # полученный через зеркало, чтобы твой бот ГАРАНТИРОВАННО прислал музыку строго по шаблону!
-    if not found_releases:
-        found_releases = [
-            {"artist": "Darkthrone", "title": "It Beckons Us All", "year": current_year, "flag": "🇳🇴", "genre": "Black Metal", "youtube": f"://youtube.com{S}results?search_query=Darkthrone+It+Beckons+Us+All", "month": month_tag},
-            {"artist": "Mayhem", "title": "Daemon", "year": current_year, "flag": "🇳🇴", "genre": "Black Metal", "youtube": f"://youtube.com{S}results?search_query=Mayhem+Daemon", "month": month_tag},
-            {"artist": "Alcest", "title": "Les Chants de l'Aurore", "year": current_year, "flag": "🇫🇷", "genre": "Blackgaze", "youtube": f"://youtube.com{S}results?search_query=Alcest+Les+Chants+de+l+Aurore", "month": month_tag}
-        ]
-
+            
+    driver.quit()
     return found_releases[:15]
 
 def send_to_telegram(releases):
-    # Собираем итоговое текстовое сообщение строго по твоему идеальному шаблону!
+    if not releases:
+        msg = "<b>🇳🇴 БЛЭК-МЕТАЛ ПАРСЕР (SELENIUM BROWSER)</b>\n\nДаже через реальный браузер выдача пуста. Страница тегов обновила структуру pagedata."
+        telegram_url = f"{BASE_TG}{BOT_TOKEN}{S}sendMessage"
+        requests.post(telegram_url, json={"chat_id": ADMIN_CHAT_ID, "text": msg, "parse_mode": "HTML"})
+        return
+
     msg = ""
     for r in releases:
         msg += f"<code>{r['artist']} - {r['title']} ({r['year']})</code>\n"
         msg += f"{r['flag']} {r['genre']}\n"
         msg += f"{r['youtube']} {r['month']}\n"
-        msg += "---\n"  # Твой разделитель между релизами
+        msg += "---\n"
 
     telegram_url = f"{BASE_TG}{BOT_TOKEN}{S}sendMessage"
     payload = {
@@ -144,6 +145,6 @@ def send_to_telegram(releases):
     requests.post(telegram_url, json=payload)
 
 if __name__ == "__main__":
-    results = parse_bandcamp_final_prooriv()
+    results = parse_via_real_browser()
     send_to_telegram(results)
     
