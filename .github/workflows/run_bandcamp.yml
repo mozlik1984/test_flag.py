@@ -20,7 +20,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4 curl_cffi typing_extensions
 
-      # ШАГ 7.4: Полное сканирование содержимого appData на массивы альбомов
+      # ШАГ 8: Вскрываем data-blob на НАСТОЯЩЕЙ странице тега
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
@@ -28,14 +28,17 @@ jobs:
           import html
           from curl_cffi import requests as cloud_requests
 
-          URL_RSS = "https://bandcamp.com"
+          # Переходим на НАСТОЯЩУЮ страницу тега, где живет андеграунд
+          URL_TAG = "https://bandcamp.com"
           HEADERS = {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 7.4 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 8 ---")
           try:
-              res = cloud_requests.get(URL_RSS, headers=HEADERS, impersonate="chrome110", timeout=20)
+              res = cloud_requests.get(URL_TAG, headers=HEADERS, impersonate="chrome110", timeout=20)
+              print(f"1. Код ответа Bandcamp: {res.status_code}")
+              print(f"2. Количество символов на странице: {len(res.text)}")
               
               if res.status_code == 200 and len(res.text) > 1000:
                   html_content = res.text
@@ -48,35 +51,30 @@ jobs:
                       raw_blob = html_content[start_idx:end_idx]
                       clean_blob = html.unescape(raw_blob)
                       data = json.loads(clean_blob)
+                      print("3. УСПЕХ: data-blob настоящей страницы тега десериализован!")
                       
-                      # Вскрываем appData на полную глубину
+                      # Смотрим главные ключи настоящей страницы
+                      print(f"4. Главные ключи в JSON: {list(data.keys())}")
+                      
+                      # Проверяем наличие скрытых блоков appData или hub_data
                       app_data = data.get("appData", {})
-                      print("1. УСПЕХ: Секция appData полностью извлечена!")
-                      print(f"2. Все доступные ключи внутри appData: {list(app_data.keys())}")
+                      if app_data:
+                          print(f"5. Найдена секция appData! Ее ключи: {list(app_data.keys())}")
                       
-                      print("\n3. Анализ типов данных и структуры подблоков:")
-                      for key in app_data.keys():
-                          val = app_data[key]
-                          if isinstance(val, list):
-                              print(f"   -> Обнаружен СПИСОК '{key}' длиной {len(val)} элементов!")
-                          elif isinstance(val, dict):
-                              # Если это словарь, смотрим его внутренние подразделы (например, hub, tag)
-                              print(f"   -> Обнаружен СЛОВАРЬ '{key}' с ключами: {list(val.keys())[:5]}")
-                              
-                              # Заглядываем на один уровень глубже в поисковые блоки
-                              for sub_key in val.keys():
-                                  if isinstance(val[sub_key], list) and len(val[sub_key]) > 0:
-                                      print(f"      * Внутри '{key}' найден вложенный СПИСОК '{sub_key}' ({len(val[sub_key])} элементов)")
-                                  elif isinstance(val[sub_key], dict):
-                                      print(f"      * Внутри '{key}' найден вложенный СЛОВАРЬ '{sub_key}' с ключами: {list(val[sub_key].keys())[:3]}")
+                      # Проверяем альтернативные блоки, если они есть
+                      for alt_key in ["hub_data", "tag_data", "items"]:
+                          if alt_key in data:
+                              print(f"5.1. Обнаружен альтернативный блок '{alt_key}'!")
                   else:
-                      print("СБОЙ: data-blob не найден.")
+                      print("3. СБОЙ: Маркер data-blob не найден на странице тега.")
+              else:
+                  print("3. СБОЙ: Страница вернула пустой ответ.")
           except Exception as e:
-              print(f"ОШИБКА НА ШАГЕ 7.4: {e}")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 8: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем глубокий анализ appData
+      # Запускаем анализ настоящей страницы
       - name: Run JSON Decode Test
         run: python test_metal.py
         
