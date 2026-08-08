@@ -7,7 +7,7 @@ import requests
 C = chr(58)
 S = chr(47)
 
-# Мобильный эндпоинт Bandcamp, который отдает чистый JSON без блокировок Cloudflare
+# Мобильный эндпоинт Bandcamp
 BASE_API = f"https{C}{S}{S}bandcamp.com{S}api{S}hub{S}2{S}dig_deeper"
 BASE_TG = f"https{C}{S}{S}api.telegram.org{S}bot"
 
@@ -37,7 +37,6 @@ def parse_bandcamp_mobile_api():
     total_items = 0
 
     for tag in BLACK_METAL_TAGS:
-        # Формируем легальный POST-запрос, как это делает мобильное приложение при скроллинге тега
         payload = {
             "tag": tag,
             "sort_key": "date",
@@ -68,13 +67,12 @@ def parse_bandcamp_mobile_api():
                 
                 if rel_date_str:
                     try:
-                        # В мобильном API дата идет либо таймстампом, либо строкой вроде "2026-07-15" или "15 Jul 2026"
                         if "-" in rel_date_str:
                             rel_date = datetime.strptime(rel_date_str[:10], "%Y-%m-%d")
                         else:
                             rel_date = datetime.strptime(rel_date_str, "%d %b %Y")
                         
-                        # Обкатываем: проверяем ИЮЛЬ (7) или АВГУСТ (8) 2026 года
+                        # ИСПРАВЛЕНО: проверяем ИЮЛЬ (7) или АВГУСТ (8) 2026 года
                         if rel_date.year == 2026 and rel_date.month in:
                             is_target_period = True
                     except Exception:
