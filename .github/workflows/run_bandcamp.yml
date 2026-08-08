@@ -20,48 +20,74 @@ jobs:
           python -m pip install --upgrade pip
           pip install curl_cffi typing_extensions
 
-      # ШАГ 9.2: Печатаем сырой текст вокруг найденного сборника релизов
+      # ШАГ 9.3: Парсим JSON статей, вытаскивая заголовки и ссылки
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
+          import json
           import html
           from curl_cffi import requests as cloud_requests
 
           URL_DAILY = "https://bandcamp.com"
           HEADERS = {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 9.2 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 9.3 ---")
           try:
               res = cloud_requests.get(URL_DAILY, headers=HEADERS, impersonate="chrome110", timeout=20)
               
               if res.status_code == 200 and len(res.text) > 1000:
                   html_content = res.text
-                  
-                  # Наш главный ориентир, который точно есть на странице
-                  marker = "Essential Releases"
+                  marker = 'data-blob="'
                   
                   if marker in html_content:
-                      print("1. УСПЕХ: Маркер 'Essential Releases' найден в коде!")
-                      idx = html_content.find(marker)
+                      start_idx = html_content.find(marker) + len(marker)
+                      end_idx = html_content.find('"', start_idx)
                       
-                      # Берем кусок текста после маркера и очищаем от зашифрованных кавычек &quot;
-                      raw_chunk = html_content[idx:idx+1200]
-                      clean_chunk = html.unescape(raw_chunk)
+                      raw_blob = html_content[start_idx:end_idx]
+                      clean_blob = html.unescape(raw_blob)
+                      data = json.loads(clean_blob)
                       
-                      print("\n2. СЫРОЙ ТЕКСТ КАТАЛОГА ДЛЯ ИЗУЧЕНИЯ ФОРМАТА:")
-                      print(clean_chunk)
+                      # Добираемся до блока со статьями, который мы увидели в логе
+                      app_data = data.get("appData", {})
+                      editorial = app_data.get("featuredEditorial", {})
+                      
+                      # Собираем главную статью и вложенные маленькие статьи
+                      articles = []
+                      if isinstance(editorial, dict):
+                          # Проверяем главный баннер
+                          big_item = editorial.get("bigItem")
+                          if big_item:
+                              articles.append(big_item)
+                          # Проверяем вложенные маленькие элементы
+                          small_items = editorial.get("smallItems", [])
+                          articles.extend(small_items)
+                          
+                      print(f"1. Всего статей обнаружено в блоке: {len(articles)}")
+                      
+                      print("\n2. НАЗВАНИЯ ОБЗОРОВ И ССЫЛКИ НА BANDCAMP DAILY:")
+                      for art in articles:
+                          title = art.get("title") or art.get("franchiseName") or "Untitled Article"
+                          blurb = art.get("blurb") or ""
+                          url = art.get("url") or "No URL"
+                          
+                          # Выводим информацию о статье на экран
+                          print(f"   -> Обзор: {title}")
+                          if blurb:
+                              print(f"      Описание: {blurb}")
+                          print(f"      Ссылка: {url}")
+                          print("   ---")
                   else:
-                      print("1. СБОЙ: Маркер 'Essential Releases' не найден. Страница обновилась.")
+                      print("СБОЙ: data-blob не найден.")
               else:
                   print("СБОЙ: Ответ пуст.")
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА: {e}")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 9.3: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем вывод текстового куска
-      - name: Run Text Chunk Scanner
+      # Запускаем извлечение названий статей
+      - name: Run Article Parser
         run: python test_metal.py
         
