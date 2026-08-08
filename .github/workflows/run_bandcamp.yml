@@ -1,56 +1,31 @@
 name: Run Bandcamp Underground Collector
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Кнопка ручного запуска
   schedule:
-    - cron: '0 12 * * 1'
+    - cron: '0 12 * * 1' # Запуск каждый понедельник в 12:00 UTC
 
 jobs:
   run-bandcamp-script:
     runs-on: ubuntu-latest
     steps:
-      - name: Run Bash Collector
-        env:
-          TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          CHAT_ID: "5002053185"
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      # Устанавливаем beautifulsoup4 и curl_cffi для обхода Cloudflare
+      - name: Install dependencies
         run: |
-          # 1. Получаем текущую дату для третьей строки шаблона (например, AUG 2026)
-          YEAR=$(date +%Y)
-          MONTH=$(date +%b | tr '[:lower:]' '[:upper:]')
+          python -m pip install --upgrade pip
+          pip install beautifulsoup4 curl_cffi requests
 
-          # 2. Скачиваем шлюз встроенных плееров блэк-метала напрямую (без прокси, так как cURL Cloudflare не банит)
-          HTML_DATA=$(curl -s -A "Mozilla/5.0" "https://bandcamp.com")
-
-          # 3. Базовые метрики для отладки
-          HTML_LEN=${#HTML_DATA}
-          echo "Downloaded HTML length: $HTML_LEN"
-
-          # 4. Вытаскиваем все релизы из атрибутов alt картинок (формат: Album Name by Band Name)
-          # Используем системную утилиту grep для моментального сбора данных
-          RAW_ITEMS=$(echo "$HTML_DATA" | grep -o 'alt="[^"]* by [^"]*"' | sed 's/alt="//' | sed 's/"//' | head -n 10)
-
-          # 5. Если элементов в верстке нет — отправляем сухую диагностику
-          if [ -z "$RAW_ITEMS" ]; then
-            MSG="DIAGNOSTIC LOG EMBEDDED PLAYER%0A%0AMETRICS:%0ABandcamp status: 200%0AHTML length: $HTML_LEN%0ATotal items found: 0%0A%0ARESULT: No black metal releases detected inside HTML structure."
-            curl -s -X POST "https://telegram.org" -d "chat_id=$CHAT_ID&text=$MSG&parse_mode=HTML"
-            exit 0
-          fi
-
-          # 6. Если релизы найдены — пересобираем их строго по твоему текстовому шаблону!
-          FINAL_MSG="DIAGNOSTIC LOG EMBEDDED PLAYER%0A%0AMETRICS:%0ABandcamp status: 200%0AHTML length: $HTML_LEN%0A%0ANEW RELEASES FROM BANDCAMP:%0A%0A"
-          
-          while IFS= read -r line; do
-            TITLE=$(echo "$line" | awk -F ' by ' '{print $1}')
-            ARTIST=$(echo "$line" | awk -F ' by ' '{print $2}')
-            
-            # Экранируем пробелы для отправки в Telegram URL
-            ARTIST_ENC=$(echo "$ARTIST" | sed 's/ /+/g')
-            TITLE_ENC=$(echo "$TITLE" | sed 's/ /+/g')
-
-            # Сборка строк шаблона
-            FINAL_MSG="$FINAL_MSG<code>$ARTIST - $TITLE ($YEAR)</code>%0AGenre: Black Metal%0Ahttps://youtube.com $MONTH%0A---%0A"
-          done <<< "$RAW_ITEMS"
-
-          # 7. Отправляем готовый текстовый лог в Телеграм-бот
-          curl -s -X POST "https://telegram.org" -d "chat_id=$CHAT_ID&text=$FINAL_MSG&parse_mode=HTML&disable_web_page_preview=true"
-          
+      # Запускаем наш чистый питоновский файл
+      - name: Run Bandcamp Parser
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        run: python bandcamp.py
+        
