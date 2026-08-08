@@ -20,54 +20,61 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4 curl_cffi typing_extensions
 
-      # ШАГ 9.5: Запрашиваем чистый JSON статьи из официального контент-API Bandcamp
+      # ШАГ 9.6: Сканируем чистый текст статьи на наличие музыкальных пар "Исполнитель - Альбом"
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
-          import json
+          import re
+          from bs4 import BeautifulSoup
           from curl_cffi import requests as cloud_requests
 
-          # Официальный эндпоинт контента блогов с ID вчерашней статьи Essential Releases
-          URL_API = "https://bandcamp.com"
+          URL_ARTICLE = "https://bandcamp.com"
           HEADERS = {
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 9.5 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 9.6 ---")
           try:
-              res = cloud_requests.get(URL_API, headers=HEADERS, impersonate="chrome110", timeout=20)
-              print(f"1. Код ответа API контента: {res.status_code}")
-              print(f"2. Количество символов JSON: {len(res.text)}")
+              res = cloud_requests.get(URL_ARTICLE, headers=HEADERS, impersonate="chrome110", timeout=20)
+              print(f"1. Код ответа сервера: {res.status_code}")
+              print(f"2. Количество символов в коде статьи: {len(res.text)}")
               
-              if res.status_code == 200 and len(res.text) > 100:
-                  data = res.json()
-                  print(f"3. УСПЕХ: JSON статьи успешно получен!")
-                  print(f"4. Главные ключи в ответе API: {list(data.keys())}")
+              if res.status_code == 200 and len(res.text) > 1000:
+                  # Превращаем HTML-код в сплошной чистый текст без тегов
+                  soup = BeautifulSoup(res.text, "html.parser")
+                  plain_text = soup.get_text()
                   
-                  # Заглядываем внутрь самых вероятных блоков с музыкальными плеерами
-                  article_data = data.get("article", {}) or data.get("data", {})
-                  if isinstance(article_data, dict):
-                      print(f"5. Ключи подблока контента: {list(article_data.keys())[:6]}")
-                      
-                      # Проверяем, есть ли списки аудио или плееров (обычно называются 'items', 'tralbums', 'audio_items')
-                      for key in ["items", "tralbums", "audio_items", "body", "blocks"]:
-                          if key in article_data:
-                              val = article_data[key]
-                              if isinstance(val, list):
-                                  print(f"   -> Найдена музыкальная папка '{key}' длиной {len(val)} элементов!")
-                              else:
-                                  print(f"   -> Обнаружен блок '{key}' типа {type(val)}")
-                  else:
-                      print("5. Сырой срез текста ответа:")
-                      print(res.text[:300])
+                  # Ищем любые строки, где слова разделены дефисом (например, "Darkthrone - Transilvanian Hunger")
+                  # Ограничиваем длину захвата, чтобы не собирать системные длинные строки
+                  text_pairs = re.findall(r'([A-Za-z0-9\s]{3,30}\s*-\s*[A-Za-z0-9\s]{3,40})', plain_text)
+                  
+                  print(f"3. Всего текстовых пар с дефисом обнаружено: {len(text_pairs)}")
+                  
+                  print("\n4. СЫРОЙ СПИСОК ТЕКСТОВЫХ СОВПАДЕНИЙ ИЗ СТАТЬИ:")
+                  count = 0
+                  seen = set()
+                  for pair in text_pairs:
+                      clean_pair = pair.strip()
+                      # Убираем дубликаты и системный мусор
+                      if clean_pair.lower() in seen or "bandcamp" in clean_pair.lower() or "essential" in clean_pair.lower():
+                          continue
+                          
+                      print(f"   -> Строка из текста: {clean_pair}")
+                      seen.add(clean_pair.lower())
+                      count += 1
+                      if count >= 15:
+                          break
+                          
+                  if count == 0:
+                      print("В чистом тексте страницы текстовые пары с разделителем '-' не найдены.")
               else:
-                  print("СБОЙ: Шлюз контента вернул пустой ответ.")
+                  print("СБОЙ: Не удалось загрузить код статьи.")
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 9.5: {e}")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 9.6: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем контент-тест API
+      # Запускаем текстовый сканер пар
       - name: Run Article Content Test
         run: python test_metal.py
         
