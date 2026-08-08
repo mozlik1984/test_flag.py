@@ -20,30 +20,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4 curl_cffi typing_extensions
 
-      # ШАГ 8.2: Переключаем теговое API в рабочий GET-режим
+      # ШАГ 8.3: Читаем сырой текст ответа API без падения метода .json()
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
-          import json
-          from datetime import datetime
           from curl_cffi import requests as cloud_requests
 
-          # Официальный GET-шлюз подгрузки карточек андеграунда
           URL_API = "https://bandcamp.com"
           
           HEADERS = {
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           }
 
-          FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk"]
-
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 8.2 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 8.3 ---")
           try:
-              now = datetime.now()
-              month_tag = now.strftime("%b").upper()
-              current_year = str(now.year)
-
-              # Передаем параметры через GET-строку, как требует Nginx на Bandcamp
               params = {
                   "tag": "black-metal",
                   "sort": "date",
@@ -52,56 +42,22 @@ jobs:
               
               res = cloud_requests.get(URL_API, params=params, headers=HEADERS, impersonate="chrome110", timeout=20)
               print(f"1. Код ответа GET-API Bandcamp: {res.status_code}")
+              print(f"2. Количество символов в ответе: {len(res.text)}")
               
-              if res.status_code == 200:
-                  data = res.json()
-                  
-                  # В теговом API карточки обычно лежат в корневом ключе 'items' или 'results'
-                  items = data.get("items", []) or data.get("results", []) or data.get("list", [])
-                  
-                  # Если списки пустые, проверим структуру ответов
-                  if not items and isinstance(data, dict):
-                      for k, v in data.items():
-                          if isinstance(v, list) and len(v) > 0:
-                              items = v
-                              break
-                              
-                  print(f"2. УСПЕХ: Внутренний шлюз выдал релизов: {len(items)}")
-                  print("\n3. СВЕЖИЙ БЛЭК-МЕТАЛ УЛОВ ПО ТВОЕМУ ШАБЛОНУ:\n")
-                  
-                  count = 0
-                  for item in items:
-                      title = item.get("title") or item.get("name") or "Unknown Album"
-                      artist = item.get("artist") or item.get("artist_name") or "Unknown Artist"
-                      
-                      # Фильтрация поджанров (отсекаем дез/трэш/панк)
-                      tags_list = [t.lower() for t in item.get("tags", [])]
-                      full_desc = f"{title} {artist} {' '.join(tags_list)}".lower()
-                      
-                      if any(forbidden in full_desc for forbidden in FORBIDDEN_KEYWORDS):
-                          continue
-
-                      # Формируем и выводим строки строго по твоему идеальному текстовому шаблону!
-                      print(f"<code>{artist.strip()} - {title.strip()} ({current_year})</code>")
-                      print("[Norway] Black Metal")
-                      print(f"https://youtube.com {month_tag}")
-                      print("---")
-                      
-                      count += 1
-                      if count >= 10:
-                          break
-                          
-                  if count == 0 and len(items) > 0:
-                      print("Все найденные релизы отсеялись фильтрами поджанров.")
+              if res.status_code == 200 and len(res.text) > 0:
+                  # Печатаем самое начало ответа, чтобы увидеть его реальную структуру
+                  # Заменяем скобки, чтобы Гитхаб логов не скрыл их как теги
+                  clean_sample = res.text[:300].replace("<", "&lt;").replace(">", "&gt;")
+                  print(f"3. Сырой срез ответа сервера: {clean_sample}")
               else:
-                  print(f"СБОЙ ШЛЮЗА: Текст ошибки: {res.text[:200]}")
+                  print("3. СБОЙ: Сервер вернул абсолютно пустой ответ.")
                   
           except Exception as e:
-              print(f"ОШИБКА НА ШАГЕ 8.2: {e}")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 8.3: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем проверенный GET-тест на экране Гитхаба
+      # Запускаем чтение сырого текста
       - name: Run Token API Test
         run: python test_metal.py
         
