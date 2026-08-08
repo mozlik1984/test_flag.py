@@ -20,11 +20,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install curl_cffi typing_extensions
 
-      # ШАГ 6.7: Сканируем любые вариации тегов title, игнорируя XML префиксы
+      # ШАГ 6.8: Выводим первые 15 текстовых строк фида для анализа тегов
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
-          import re
           from curl_cffi import requests as cloud_requests
 
           URL_RSS = "https://bandcamp.com"
@@ -32,29 +31,20 @@ jobs:
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 6.7 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 6.8 ---")
           try:
               res = cloud_requests.get(URL_RSS, headers=HEADERS, impersonate="chrome110", timeout=20)
-              print(f"1. Код ответа Bandcamp: {res.status_code}")
-              print(f"2. Количество символов в ленте: {len(res.text)}")
               
               if res.status_code == 200 and len(res.text) > 1000:
-                  # Ищем любые теги, содержащие слово title (например, <atom:title> или <title>)
-                  raw_titles = re.findall(r"<[^>]*title[^>]*>(.*?)</[^>]*title>", res.text)
-                  print(f"3. Всего заголовков обнаружено в тексте: {len(raw_titles)}")
+                  # Разрезаем весь полученный XML по переносу строки
+                  lines = res.text.split("\n")
+                  print(f" Всего строк в файле: {len(lines)}")
                   
-                  print("\n4. СЫРОЙ СПИСОК ПЕРВЫХ 10 СТРОК ИЗ ЛЕНТЫ:")
-                  count = 0
-                  for t in raw_titles:
-                      title_clean = t.strip()
-                      if "bandcamp" in title_clean.lower() or "new releases" in title_clean.lower():
-                          continue
-                          
-                      print(f"   -> Найдено: {title_clean}")
-                      
-                      count += 1
-                      if count >= 10:
-                          break
+                  print("\n ПЕРВЫЕ 15 СТРОК ДЛЯ ИЗУЧЕНИЯ СТРУКТУРЫ:")
+                  for idx, line in enumerate(lines[:15]):
+                      # Заменяем угловые скобки, чтобы GitHub не скрыл их как HTML-теги
+                      clean_line = line.replace("<", "&lt;").replace(">", "&gt;")
+                      print(f"Строка {idx+1}: {clean_line}")
               else:
                   print("СБОЙ: Ответ пуст.")
                   
@@ -63,7 +53,7 @@ jobs:
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем гибкий сканер
+      # Запускаем вывод структуры
       - name: Run RSS Content Test
         run: python test_metal.py
         
