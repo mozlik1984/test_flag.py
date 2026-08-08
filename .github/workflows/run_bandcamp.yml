@@ -33,23 +33,22 @@ jobs:
           import json
           from datetime import datetime
           import requests
+          from bs4 import BeautifulSoup
           from curl_cffi import requests as cloud_requests
 
           d = chr(46)
           c = chr(58)
           s = chr(47)
 
-          # ПЕРЕКЛЮЧЕНО НА РАБОЧИЙ ШЛЮЗ ДАННЫХ BANDCAMP
-          BASE_API = f"https{c}{s}{s}bandcamp{d}com{s}api{s}hub{s}2{s}dig_deeper"
+          # ПРЯМОЙ ШЛЮЗ СТРАНИЦ ТЕГОВ
+          BASE_BC = f"https{c}{s}{s}bandcamp{d}com{s}tag{s}"
           BASE_TG = f"https{c}{s}{s}api{d}telegram{d}org{s}bot"
 
           BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
           ADMIN_CHAT_ID = "5002053185"
 
           BLACK_METAL_TAGS = [
-              "black-metal", "atmospheric-black-metal", "depressive-black-metal", 
-              "raw-black-metal", "symphonic-black-metal", "post-black-metal", 
-              "melodic-black-metal", "blackgaze"
+              "black-metal", "atmospheric-black-metal", "depressive-black-metal"
           ]
 
           FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk"]
@@ -57,95 +56,46 @@ jobs:
           def run_furious_parser():
               now = datetime.now()
               found_releases = []
-              seen_urls = set()
+              seen_identities = set()
               
               status_code = 0
-              total_search_items = 0
+              html_length = 0
+              total_links_found = 0
               skipped_by_filters = 0
               sample_titles = []
 
               month_tag = now.strftime("%b").upper()
               current_year = str(now.year)
 
+              headers = {
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+              }
+
               for tag in BLACK_METAL_TAGS:
-                  # Легальные параметры POST-запроса для актуального API
-                  payload = {
-                      "tag": tag,
-                      "sort_key": "date",
-                      "page": 0
-                  }
+                  url = f"{BASE_BC}{tag}"
                   try:
-                      res = cloud_requests.post(BASE_API, json=payload, impersonate="chrome110", timeout=15)
+                      # Делаем ПРЯМОЙ GET-запрос к странице тега через маскировку Chrome
+                      res = cloud_requests.get(url, headers=headers, impersonate="chrome110", timeout=20)
                       
                       if status_code == 0:
                           status_code = res.status_code
+                          html_length = len(res.text)
                           
-                      if res.status_code != 200:
+                      if res.status_code != 200 or not res.text:
                           continue
                           
-                      data = res.json()
-                      # В этом API альбомы лежат либо в 'items', Bird в 'results'
-                      items = data.get("items", []) or data.get("results", [])
+                      soup = BeautifulSoup(res.text, "html.parser")
                       
-                      for item in items:
-                          total_search_items += 1
-                          album_url = item.get("tralbum_url") or item.get("url")
-                          if not album_url or album_url in seen_urls:
-                              continue
-                              
-                          title = item.get("title", "Unknown Album").strip()
-                          artist = item.get("artist", "Unknown Artist").strip()
+                      # ЖЕЛЕЗОБЕТОННЫЙ ПОИСК: Вытаскиваем абсолютно все ссылки на альбомы из верстки страницы
+                      links = soup.find_all("a", href=True)
+                      
+                      for link in links:
+                          href = link["href"].lower()
+                          text = link.text.strip()
                           
-                          tags_list = [t.lower() for t in item.get("tags", [])]
-                          full_desc = f"{title} {artist} {' '.join(tags_list)}".lower()
-                          
-                          if any(forbidden in full_desc for forbidden in FORBIDDEN_KEYWORDS):
-                              skipped_by_filters += 1
-                              continue
-
-                          if len(sample_titles) < 3:
-                              sample_titles.append(f"{artist} - {title}"[:35])
-
-                          location = item.get("artist_location", "").lower() or item.get("location", "").lower()
-                          flag = "[Norway]"
-                          if "sweden" in location: flag = "[Sweden]"
-                          elif "finland" in location: flag = "[Finland]"
-                          elif "france" in location: flag = "[France]"
-                          elif "germany" in location: flag = "[Germany]"
-                          elif "usa" in location or "united states" in location: flag = "[USA]"
-                          elif "ukraine" in location: flag = "[Ukraine]"
-                          elif "poland" in location: flag = "[Poland]"
-
-                          genre_text = tag.replace("-", " ").title()
-
-                          found_releases.append({
-                              "artist": artist,
-                              "title": title,
-                              "year": current_year,
-                              "country": flag,
-                              "genre": genre_text
-                          })
-                          seen_urls.add(album_url)
-
-                  except Exception as e:
-                      print(f"Error: {e}")
-                      continue
-
-              samples_str = ", ".join([f"'{t}'" for t in sample_titles])
-              
-              msg = "DIAGNOSTIC LOG HUB API\n\n"
-              msg += "METRICS:\n"
-              msg += f"Bandcamp status: {status_code}\n"
-              msg += f"Total search items: {total_search_items}\n"
-              msg += f"Skipped by filters: {skipped_by_filters}\n"
-              msg += f"Raw items snippet: [{samples_str}]\n\n"
-              
-              if not found_releases:
-                  msg += "RESULT: No pure black metal releases found in search index."
-              else:
-                  msg += "NEW RELEASES FROM BANDCAMP:\n\n"
-                  for r in found_releases:
-                      msg += f"<code>{r['artist']} - {r['title']} ({r['year']})</code>\n"
+                          # Нам нужны только музыкальные ссылки на релизы Bandcamp
+                          if "://bandcamp.com" in href or "/album/" in href:
+                              if not text or len(text) {r['artist']} - {r['title']} ({r['year']})</code>\n"
                       msg += f"{r['country']} {r['genre']}\n"
                       msg += f"https{c}{s}{s}youtube{d}com {month_tag}\n"
                       msg += "---\n"
