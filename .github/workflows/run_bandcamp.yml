@@ -20,7 +20,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install curl_cffi typing_extensions
 
-      # ШАГ 6.6: Выводим 10 абсолютно сырых заголовков без фильтров и разделений
+      # ШАГ 6.7: Сканируем любые вариации тегов title, игнорируя XML префиксы
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
@@ -32,22 +32,24 @@ jobs:
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 6.6 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 6.7 ---")
           try:
               res = cloud_requests.get(URL_RSS, headers=HEADERS, impersonate="chrome110", timeout=20)
               print(f"1. Код ответа Bandcamp: {res.status_code}")
               print(f"2. Количество символов в ленте: {len(res.text)}")
               
               if res.status_code == 200 and len(res.text) > 1000:
-                  # Извлекаем вообще все строки внутри тегов title
-                  raw_titles = re.findall(r"<title>(.*?)</title>", res.text)
+                  # Ищем любые теги, содержащие слово title (например, <atom:title> или <title>)
+                  raw_titles = re.findall(r"<[^>]*title[^>]*>(.*?)</[^>]*title>", res.text)
                   print(f"3. Всего заголовков обнаружено в тексте: {len(raw_titles)}")
                   
                   print("\n4. СЫРОЙ СПИСОК ПЕРВЫХ 10 СТРОК ИЗ ЛЕНТЫ:")
                   count = 0
                   for t in raw_titles:
                       title_clean = t.strip()
-                      # Просто выводим строку на экран «как есть», чтобы увидеть реальный формат
+                      if "bandcamp" in title_clean.lower() or "new releases" in title_clean.lower():
+                          continue
+                          
                       print(f"   -> Найдено: {title_clean}")
                       
                       count += 1
@@ -61,7 +63,7 @@ jobs:
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем сырой вывод
+      # Запускаем гибкий сканер
       - name: Run RSS Content Test
         run: python test_metal.py
         
