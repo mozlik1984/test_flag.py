@@ -20,7 +20,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install beautifulsoup4 curl_cffi
 
-      # ШАГ 3: Собираем музыку напрямую из HTML-верстки, игнорируя пустой JSON
+      # ШАГ 4: Вытаскиваем токены из cfg и штурмуем внутреннее API блэк-метала
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
@@ -28,57 +28,68 @@ jobs:
           from bs4 import BeautifulSoup
           from curl_cffi import requests as cloud_requests
 
-          URL = "https://bandcamp.com"
+          # Переходим строго к тегу блэк-металла!
+          URL_PAGE = "https://bandcamp.com"
+          URL_API = "https://bandcamp.com"
+          
           HEADERS = {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              "Content-Type": "application/json"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 3 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 4 ---")
           try:
-              res = cloud_requests.get(URL, headers=HEADERS, impersonate="chrome110", timeout=20)
+              # 1. Скачиваем страницу тега для извлечения конфигурации
+              res_page = cloud_requests.get(URL_PAGE, headers=HEADERS, impersonate="chrome110", timeout=20)
               
-              if res.status_code == 200:
-                  soup = BeautifulSoup(res.text, "html.parser")
+              if res_page.status_code == 200:
+                  soup = BeautifulSoup(res_page.text, "html.parser")
+                  pagedata_tag = soup.find("div", id="pagedata") or soup.find("script", {"id": "pagedata"})
                   
-                  # Ищем карточки альбомов по стандартным классам Bandcamp (сетка сетки)
-                  items = soup.find_all("li", class_="item") or soup.find_all("div", class_="item") or soup.find_all(class_="hub-item")
-                  
-                  # Если специализированные классы не найдены, соберем все ссылки на альбомы
-                  if not items:
-                      print("Специфичные классы не найдены, переключаюсь на сбор по тегам ссылок...")
-                      all_links = soup.find_all("a", href=True)
-                      album_links = [l for l in all_links if "/album/" in l["href"]]
-                      print(f"1. Всего ссылок на альбомы в верстке: {len(album_links)}")
+                  if pagedata_tag:
+                      raw_blob = pagedata_tag.get("data-blob") or pagedata_tag.text
+                      pagedata = json.loads(raw_blob)
                       
-                      print("\n2. Первые 5 найденных релизов:")
-                      seen = set()
-                      count = 0
-                      for link in album_links:
-                          text = link.text.strip()
-                          href = link["href"]
-                          if text and len(text) > 3 and text not in seen and "buy" not in text.lower():
-                              print(f"   -> Релиз: {text} | Ссылка: {href}")
-                              seen.add(text)
-                              count += 1
-                              if count >= 5:
-                                  break
+                      # Вытаскиваем системные конфигурационные ключи сайта
+                      cfg = pagedata.get("cfg", {})
+                      print("1. Системный блок конфигурации 'cfg' успешно извлечен!")
+                      
+                      # Формируем легальный POST-запрос к API, подмешивая извлеченные ключи сайта
+                      payload = {
+                          "tag": "black-metal",
+                          "sort_key": "date",
+                          "page": 0
+                      }
+                      
+                      # Добавляем куки сессии, которые выдал Bandcamp при первом заходе
+                      session_cookies = res_page.cookies.get_dict()
+                      
+                      # 2. Штурмуем закрытое API данных блэк-металла
+                      res_api = cloud_requests.post(URL_API, json=payload, headers=HEADERS, cookies=session_cookies, impersonate="chrome110", timeout=20)
+                      print(f"2. Код ответа внутреннего API Bandcamp: {res_api.status_code}")
+                      
+                      if res_api.status_code == 200:
+                          api_data = res_api.json()
+                          # Проверяем все возможные списки релизов в ответе
+                          items = api_data.get("items", []) or api_data.get("results", []) or api_data.get("hub_data", {}).get("tabs", {}).get("dig_deeper", {}).get("initial_results", [])
+                          
+                          print(f"3. УСПЕХ: Внутреннее API отдало релизов: {len(items)}")
+                          print("\n4. Первые 5 живых блэк-метал новинок:")
+                          for item in items[:5]:
+                              print(f"   -> Группа: {item.get('artist')} | Альбом: {item.get('title')} | Локация: {item.get('artist_location')}")
+                      else:
+                          print(f"3. СБОЙ API: Сервер вернул текст: {res_api.text[:200]}")
                   else:
-                      print(f"1. Найдено стандартных блоков карточек: {len(items)}")
-                      print("\n2. Первые 5 релизов из карточек:")
-                      for item in items[:5]:
-                          title_tag = item.find(class_="title") or item.find("a")
-                          artist_tag = item.find(class_="artist")
-                          
-                          title = title_tag.text.strip() if title_tag else "Unknown Album"
-                          artist = artist_tag.text.strip() if artist_tag else "Unknown Artist"
-                          print(f"   -> {artist} - {title}")
-                          
+                      print("СБОЙ: Не найден тег pagedata на странице.")
+              else:
+                  print(f"СБОЙ: Страница тега вернула код {res_page.status_code}")
+                  
           except Exception as e:
-              print(f"ОШИБКА ПАРСИНГА ВЕРСТКИ: {e}")
+              print(f"ОШИБКА НА ШАГЕ 4: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем HTML-тест на экране Гитхаба
-      - name: Run HTML Layout Test
+      # Запускаем тест API на экране Гитхаба
+      - name: Run Token API Test
         run: python test_metal.py
         
