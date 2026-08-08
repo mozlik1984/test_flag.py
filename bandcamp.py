@@ -22,14 +22,14 @@ BLACK_METAL_TAGS = [
     "melodic-black-metal", "blackgaze"
 ]
 
-FORBIDDEN_TAGS = ["thrash-metal", "death-metal", "heavy-metal", "power-metal", "metalcore"]
+# Жесткий список исключений (чтобы никакой лишней музыки)
+FORBIDDEN_TAGS = ["thrash-metal", "death-metal", "heavy-metal", "power-metal", "metalcore", "punk", "electronic"]
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
 def parse_bandcamp_via_proxy():
-    now = datetime.now()
     found_releases = []
     seen_urls = set()
     total_raw_items = 0
@@ -40,7 +40,7 @@ def parse_bandcamp_via_proxy():
         full_proxy_url = f"{PROXY_GATEWAY}{encoded_url}"
         
         try:
-            res = requests.get(full_proxy_url, headers=HEADERS, timeout=20)
+            res = requests.get(full_proxy_url, headers=HEADERS, timeout=25)
             if res.status_code != 200:
                 print(f"Шлюз прокси для тега {tag} вернул ошибку {res.status_code}")
                 continue
@@ -69,32 +69,21 @@ def parse_bandcamp_via_proxy():
                 if not album_url or album_url in seen_urls:
                     continue
                     
+                # Очистка поджанров
                 item_tags = [t.lower() for t in item.get("tags", [])]
                 if any(forbidden in item_tags for forbidden in FORBIDDEN_TAGS):
                     continue
                 
-                rel_date_str = item.get("release_date")
-                is_target_period = False
+                # Фильтр дат УПРАЗДНЕН. Доверяем сортировке самого Bandcamp.
+                # Ссылка очищается от реферальных меток
+                clean_url = album_url.split('?') if '?' in album_url else album_url
                 
-                if rel_date_str:
-                    try:
-                        rel_date = datetime.strptime(rel_date_str, "%d %b %Y")
-                        # ЖЕЛЕЗОБЕТОННАЯ ПРОВЕРКА: Июль и Август через знак больше
-                        if rel_date.year == 2026 and rel_date.month > 6:
-                            is_target_period = True
-                    except Exception:
-                        is_target_period = True
-                else:
-                    is_target_period = True
-
-                if is_target_period:
-                    clean_url = album_url.split('?') if '?' in album_url else album_url
-                    found_releases.append({
-                        "artist": item.get("artist", "Unknown Artist").strip(),
-                        "title": item.get("title", "Unknown Album").strip(),
-                        "url": clean_url
-                    })
-                    seen_urls.add(album_url)
+                found_releases.append({
+                    "artist": item.get("artist", "Unknown Artist").strip(),
+                    "title": item.get("title", "Unknown Album").strip(),
+                    "url": clean_url
+                })
+                seen_urls.add(album_url)
 
         except Exception as e:
             print(f"Ошибка прорыва Cloudflare для тега {tag}: {e}")
@@ -110,10 +99,10 @@ def send_to_telegram(releases, total_raw):
     
     if not releases:
         msg = f"<b>🇳🇴 БЛЭК-МЕТАЛ ПАРСЕР (PROXY BYPASS)</b>\n\n"
-        msg += f"Cloudflare успешно пробит! Из JSON-блока выгружено альбомов: <code>{total_raw}</code>.\n"
-        msg += f"Но среди них нет релизов строго за Июль-Август {now.year}."
+        msg += f"Сеть пробита! Из JSON-блока выгружено альбомов: <code>{total_raw}</code>.\n"
+        msg += "Но ни один релиз не прошел жанровый фильтр-очистку от трэша/дэта."
     else:
-        msg = f"<b>🇳🇴 СВЕЖИЙ БЛЭК-МЕТАЛ УЛОВ С BANDCAMP ({months_ru[now.month]} {now.year})</b>\n\n"
+        msg = f"<b>🇳🇴 ЕЖЕНЕДЕЛЬНЫЙ БЛЭК-МЕТАЛ УЛОВ С BANDCAMP ({months_ru[now.month]} {now.year})</b>\n\n"
         for r in releases:
             msg += f"• <code>{r['artist']} - {r['title']}</code>\n🔗 {r['url']}\n\n"
 
