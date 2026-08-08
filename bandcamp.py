@@ -13,7 +13,7 @@ s = chr(47)
 # Посимвольная монолитная сборка прокси-домена: https://codetabs.com
 PROXY_DOM = f"https{c}{s}{s}api{d}codetabs{d}com{s}cors-proxy{s}"
 
-# ИСПРАВЛЕНО: Все слеши строго маленькой буквой {s}! https://bandcamp.com
+# Все слеши строго маленькой буквой {s}: https://bandcamp.com
 FEED_DOM = f"https{c}{s}{s}bandcamp{d}com{s}feed{s}tag{s}"
 
 # Базовый адрес отправки сообщений Telegram: https://telegram.org
@@ -42,7 +42,7 @@ def parse_bandcamp_rss_cascade():
     found_releases = []
     seen_urls = set()
     
-    # Карта отладки (ВСЕГДА отправляется в Telegram)
+    # Карта отладки (Имя ключа строго зафиксировано как 'sample_titles')
     debug_log = {
         "status_code": 0,
         "raw_text_length": 0,
@@ -131,7 +131,8 @@ def parse_bandcamp_rss_cascade():
     return found_releases[:15], debug_log
 
 def send_to_telegram(releases, debug_log):
-    samples_str = ", ".join([f"'{t}'" for t in debug_log["raw_titles_sample"]])
+    # ИСПРАВЛЕНО: Ключ извлечения строго синхронизирован с debug_log['sample_titles']
+    samples_str = ", ".join([f"'{t}'" for t in debug_log["sample_titles"]])
     
     msg = f"<b>🔎 ПОСТОЯННЫЙ ЛОГ ОТЛАДКИ RSS-FEED</b>\n\n"
     msg += f"<b>📊 Метрики шлюза:</b>\n"
