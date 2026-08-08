@@ -1,88 +1,103 @@
 import os
 import json
 from datetime import datetime
-import requests
+import cloudscraper
+from bs4 import BeautifulSoup
 
-# ASCII маскировка
+# ASCII маскировка путей
 C = chr(58)
 S = chr(47)
 
-# Неблокируемый поисковый микро-шлюз Bandcamp
-BASE_API = f"https{C}{S}{S}bandcamp.com{S}api{S}bcsearch{S}1{S}autocomplete"
+# Прямой базовый URL Bandcamp
+BASE_BC = f"https{C}{S}{S}bandcamp.com{S}tag{S}"
 BASE_TG = f"https{C}{S}{S}api.telegram.org{S}bot"
 
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_CHAT_ID = "5002053185"
 
-# Ключевые слова для поиска
-QUERIES = ["black metal", "atmospheric black metal", "depressive black metal"]
+BLACK_METAL_TAGS = [
+    "black-metal", "atmospheric-black-metal", "depressive-black-metal", 
+    "raw-black-metal", "symphonic-black-metal", "post-black-metal", 
+    "melodic-black-metal", "blackgaze"
+]
 
-# Словарь для флагов стран на основе локации группы
+FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk"]
+
+# Словарь для автоматической расстановки флагов стран по локации группы
 COUNTRY_FLAGS = {
     "norway": "🇳🇴", "sweden": "🇸🇪", "finland": "🇫🇮", "france": "🇫🇷",
-    "germany": "🇩🇪", "usa": "🇺🇸", "ukraine": "🇺🇦", "poland": "🇵🇱",
-    "austria": "🇦🇹", "italy": "🇮🇹", "canada": "🇨🇦", "iceland": "🇮🇸"
+    "germany": "🇩🇪", "usa": "🇺🇸", "united states": "🇺🇸", "ukraine": "🇺🇦", 
+    "poland": "🇵🇱", "austria": "🇦🇹", "italy": "🇮🇹", "canada": "🇨🇦", 
+    "iceland": "🇮🇸", "greece": "🇬🇷", "russia": "🇷🇺", "united kingdom": "🇬🇧"
 }
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-}
-
-def parse_bandcamp_micro_api():
+def parse_bandcamp_hardcore():
     now = datetime.now()
     found_releases = []
     seen_urls = set()
 
-    # Формируем метку месяца для третьей строки (например, "AUG")
+    # Формируем текстовую метку текущего месяца (например, "AUG")
     months_en = {1:"JAN", 2:"FEB", 3:"MAR", 4:"APR", 5:"MAY", 6:"JUN", 7:"JUL", 8:"AUG", 9:"SEP", 10:"OCT", 11:"NOV", 12:"DEC"}
     month_tag = months_en[now.month]
+    current_year = str(now.year)
 
-    for q in QUERIES:
-        params = {"q": q}
+    # Создаем умный сканер Cloudflare, который прикидывается браузером Chrome на Windows
+    scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False})
+
+    for tag in BLACK_METAL_TAGS:
+        url = f"{BASE_BC}{tag}"
         try:
-            res = requests.get(BASE_API, params=params, headers=HEADERS, timeout=15)
+            # Стучимся напрямую на Bandcamp сквозь Cloudflare защита
+            res = scraper.get(url, timeout=25)
             if res.status_code != 200:
+                print(f"Защита не пробита для тега {tag}: статус {res.status_code}")
                 continue
                 
-            data = res.json()
-            items = data.get("results", [])
+            soup = BeautifulSoup(res.text, "html.parser")
+            pagedata_tag = soup.find("div", id="pagedata") or soup.find("script", {"id": "pagedata"})
+            if not pagedata_tag:
+                continue
+                
+            raw_blob = pagedata_tag.get("data-blob") or pagedata_tag.text
+            if not raw_blob:
+                continue
+                
+            data = json.loads(raw_blob)
+            dig_deeper = data.get("hub_data", {}).get("tabs", {}).get("dig_deeper", {}).get("initial_results", [])
             
-            for item in items:
-                # Извлекаем ссылку на альбом/группу
-                album_url = item.get("url", "")
+            for item in dig_deeper:
+                album_url = item.get("tralbum_url")
                 if not album_url or album_url in seen_urls:
                     continue
                     
-                # Получаем имя артиста и название релиза
-                # Поле 'name' в автодополнении часто содержит название релиза, а 'artist_name' - группу
-                title = item.get("name", "Unknown Release").strip()
-                artist = item.get("artist_name", "").strip()
+                title = item.get("title", "Unknown Album").strip()
+                artist = item.get("artist", "Unknown Artist").strip()
                 
-                # Если имя артиста пустое (например, это карточка самой группы), 
-                # переносим название в артисты, чтобы не ломать структуру
-                if not artist:
-                    artist = title
-                    title = "Release"
-
-                # Определяем жанровое описание. Если Bandcamp не отдал жанр, ставим Atmospheric Black Metal
-                genre_text = item.get("genre") or item.get("stat") or "Atmospheric Black Metal"
+                # Полное описание жанров релиза для жесткого отсева
+                item_tags = [t.lower() for t in item.get("tags", [])]
+                genre_text = item.get("genre") or tag.replace("-", " ").title()
                 
-                # Подбираем эмодзи-флаг страны по локации
-                location = item.get("location", "").lower()
-                flag = "🇳🇴"  # Тру-дефолт для блэка
+                # Проверяем, чтобы в тегах и названии не было трэша/дэта/панка
+                full_desc_lower = f"{title} {artist} {' '.join(item_tags)}".lower()
+                if any(forbidden in full_desc_lower for forbidden in FORBIDDEN_KEYWORDS):
+                    continue
+                
+                # Определяем страну для эмодзи-флага
+                location = item.get("artist_location", "").lower()
+                flag = "🇳🇴" # Тру-дефолт флаг по умолчанию
                 for c_key, c_flag in COUNTRY_FLAGS.items():
                     if c_key in location:
                         flag = c_flag
                         break
 
-                # Формируем ссылку на YouTube-поиск для третьей строки вашего шаблона
+                # Генерируем прямую поисковую ссылку на YouTube по твоему шаблону
                 youtube_query = f"{artist} {title}".replace(" ", "+")
                 youtube_link = f"://youtube.com{S}results?search_query={youtube_query}"
 
                 found_releases.append({
                     "artist": artist,
                     "title": title,
-                    "year": str(now.year),
+                    "year": current_year,
                     "flag": flag,
                     "genre": genre_text,
                     "youtube": youtube_link,
@@ -91,14 +106,14 @@ def parse_bandcamp_micro_api():
                 seen_urls.add(album_url)
 
         except Exception as e:
-            print(f"Ошибка микро-шлюза: {e}")
+            print(f"Ошибка сканирования тега {tag}: {e}")
             continue
-
+            
     return found_releases[:15]
 
 def send_to_telegram(releases):
     if not releases:
-        msg = "<b>🇳🇴 БЛЭК-МЕТАЛ ПАРСЕР (MICRO SHIELD)</b>\n\nДаже базовые результаты автодополнения пришли пустыми. Профилактика на сервере."
+        msg = "<b>🇳🇴 БЛЭК-МЕТАЛ ПАРСЕР (HARDCORE MODE)</b>\n\nДаже через cloudscraper не удалось зацепить свежие релизы из pagedata. Сервер забанен полностью."
         telegram_url = f"{BASE_TG}{BOT_TOKEN}{S}sendMessage"
         requests.post(telegram_url, json={"chat_id": ADMIN_CHAT_ID, "text": msg, "parse_mode": "HTML"})
         return
@@ -109,7 +124,7 @@ def send_to_telegram(releases):
         msg += f"<code>{r['artist']} - {r['title']} ({r['year']})</code>\n"
         msg += f"{r['flag']} {r['genre']}\n"
         msg += f"{r['youtube']} {r['month']}\n"
-        msg += "---\n"
+        msg += "---\n"  # Твой разделитель между релизами
 
     telegram_url = f"{BASE_TG}{BOT_TOKEN}{S}sendMessage"
     payload = {
@@ -122,6 +137,6 @@ def send_to_telegram(releases):
     requests.post(telegram_url, json=payload)
 
 if __name__ == "__main__":
-    results = parse_bandcamp_micro_api()
+    results = parse_bandcamp_hardcore()
     send_to_telegram(results)
     
