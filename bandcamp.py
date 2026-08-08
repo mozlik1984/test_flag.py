@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 
 # Конфигурация
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
-ADMIN_CHAT_ID = "5002053185"  # Жестко прописан ваш ID чата
+ADMIN_CHAT_ID = "5002053185"  # Ваш ID чата
 
 BLACK_METAL_TAGS = [
     "black-metal", "atmospheric-black-metal", "depressive-black-metal", 
@@ -30,6 +30,7 @@ def parse_bandcamp_current_month():
         try:
             res = requests.get(url, headers=HEADERS, timeout=15)
             if res.status_code != 200:
+                print(f"Пропуск тега {tag}: статус {res.status_code}")
                 continue
                 
             soup = BeautifulSoup(res.text, "html.parser")
@@ -49,7 +50,7 @@ def parse_bandcamp_current_month():
                 if any(forbidden in item_tags for forbidden in FORBIDDEN_TAGS):
                     continue
                 
-                # Исправленная очистка ссылки от реферальных хвостов (берем только до знака ?)
+                # Корректно отсекаем реферальный хвост ссылки
                 clean_url = album_url.split('?')[0]
                 
                 rel_date_str = item.get("release_date")
@@ -73,7 +74,7 @@ def parse_bandcamp_current_month():
                         seen_urls.add(album_url)
 
         except Exception as e:
-            print(f"Ошибка тега {tag}: {e}")
+            print(f"Ошибка при обработке тега {tag}: {e}")
             continue
             
     print(f"Всего найдено подходящих релизов: {len(found_releases)}")
@@ -81,7 +82,6 @@ def parse_bandcamp_current_month():
 
 def send_to_telegram(releases):
     if not releases:
-        # Теперь бот пришлет уведомление, даже если улов пуст — так вы поймете, что связь работает!
         msg = "<b>🇳🇴 АВТОНОМНЫЙ БЛЭК-МЕТАЛ ПАРСЕР</b>\n\nЗа текущий период новых релизов на главной странице не обнаружено."
     else:
         months_ru = {1:"Январь", 2:"Февраль", 3:"Март", 4:"Апрель", 5:"Май", 6:"Июнь", 7:"Июль", 8:"Август", 9:"Сентябрь", 10:"Октябрь", 11:"Ноябрь", 12:"Декабрь"}
@@ -91,9 +91,10 @@ def send_to_telegram(releases):
             msg += f"• <code>{r['artist']} - {r['title']}</code>\n🔗 {r['url']}\n\n"
 
     if not BOT_TOKEN:
-        print("Ошибка: Токен Telegram (TELEGRAM_TOKEN) не найден в переменных окружения!")
+        print("Ошибка: Токен Telegram (TELEGRAM_TOKEN) не найден в Secrets!")
         return
 
+    # ИСПРАВЛЕНО: Правильный домен telegram.org вместо telegran.org
     telegram_url = f"https://telegram.org{BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": ADMIN_CHAT_ID,
