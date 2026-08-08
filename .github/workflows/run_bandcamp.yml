@@ -20,53 +20,69 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4 curl_cffi typing_extensions
 
-      # ШАГ 10: Охота за скрытым CSRF/Сессионным токеном Bandcamp
-      - name: Auto-generate python script
+      # СБОРЩИК САМ АВТОРИЗУЕТСЯ ЧЕРЕЗ КЛИЕНТСКИЙ ШЛЮЗ И ВЫТАЩИТ КУКУ IDENTITY
+      - name: Auto-generate login script
         run: |
-          cat << 'EOF' > test_metal.py
-          import re
+          cat << 'EOF' > get_identity.py
+          import os
+          import json
           from curl_cffi import requests as cloud_requests
 
-          URL_BASE = "https://bandcamp.com"
+          # Официальный внутренний URL авторизации мобильных и веб-приложений Bandcamp
+          URL_LOGIN = "https://bandcamp.com"
+          
           HEADERS = {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              "Content-Type": "application/json"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 10 ---")
+          # Забираем логин и пароль из безопасных секретов Гитхаба
+          USERNAME = os.getenv("BC_USER")
+          PASSWORD = os.getenv("BC_PASS")
+
+          print("--- СТАРТ ПЕРЕХВАТА АВТОРИЗАЦИИ ---")
           try:
-              res = cloud_requests.get(URL_BASE, headers=HEADERS, impersonate="chrome110", timeout=20)
-              print(f"1. Код ответа сервера: {res.status_code}")
-              
-              if res.status_code == 200:
-                  html = res.text
-                  
-                  # Ищем любые упоминания токенов защиты в коде страницы
-                  csrf_matches = re.findall(r'csrfToken\s*:\s*"([^"]*)"', html) or re.findall(r'data-csrf="([^"]*)"', html)
-                  token_matches = re.findall(r'token\s*:\s*"([^"]*)"', html)
-                  
-                  if csrf_matches:
-                      print(f"2. УСПЕХ: Найден секретный CSRF токен сайта: {csrf_matches[0]}")
-                  else:
-                      print("2. Маркер csrfToken в явном виде не обнаружен.")
-                      
-                  if token_matches:
-                      print(f"3. НАЙДЕН альтернативный системный токен: {token_matches[0]}")
-                  else:
-                      print("3. Альтернативные токены в верхних скриптах отсутствуют.")
-                      
-                  # Проверяем, выдал ли нам сервер куки сессии (они тоже работают как токен авторизации API)
-                  cookies = res.cookies.get_dict()
-                  print(f"4. Всего кук выдано сервером: {len(cookies)}")
-                  if cookies:
-                      print(f"   -> Названия активных сессионных кук: {list(cookies.keys())}")
+              if not USERNAME or not PASSWORD:
+                  print("СБОЙ: Секреты BC_LOGIN или BC_PASSWORD не прописаны в настройках репозитория.")
               else:
-                  print("СБОЙ: Сервер ответил отказом.")
+                  # Формируем легальный пакет авторизации, который принимает их API
+                  payload = {
+                      "username": USERNAME,
+                      "password": PASSWORD
+                  }
+                  
+                  # Стучимся в шлюз авторизации с TLS-отпечатком браузера Chrome
+                  res = cloud_requests.post(URL_LOGIN, json=payload, headers=HEADERS, impersonate="chrome110", timeout=20)
+                  print(f"1. Код ответа сервера на запрос авторизации: {res.status_code}")
+                  
+                  if res.status_code == 200:
+                      print("2. УСПЕХ: Вход выполнен успешно!")
+                      
+                      # Извлекаем все куки, которые выдал Bandcamp после успешного ввода пароля
+                      cookies = res.cookies.get_dict()
+                      
+                      if "identity" in cookies:
+                          token = cookies["identity"]
+                          # Выводим на экран замаскированный токен, чтобы телефон не сломал его кавычками
+                          print("3. СЕКРЕТНЫЙ КЛЮЧ УСПЕШНО ПЕРЕХВАЧЕН!")
+                          print(f"   -> Твой токен 'identity' (первые 15 знаков): {token[:15]}...")
+                          print(f"   -> Твой токен 'identity' (последние 15 знаков): ...{token[-15:]}")
+                          print("\nСкопируй эти обрезки или просто зафиксируй успех. В следующем шаге мы зашьем этот токен в память!")
+                      else:
+                          print("3. СБОЙ: Вход прошел, но кука 'identity' отсутствует в ответе сервера.")
+                          print(f"   Доступные куки в ответе: {list(cookies.keys())}")
+                  else:
+                      print(f"2. СБОЙ АВТОРИЗАЦИИ: Проверь логин/пароль. Ответ сервера: {res.text[:200]}")
+                      
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 10: {e}")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем охоту за токенами
-      - name: Run Token API Test
-        run: python test_metal.py
+      # Запускаем скрипт-перехватчик
+      - name: Extract Identity Cookie
+        env:
+          BC_USER: ${{ secrets.BC_LOGIN }}
+          BC_PASS: ${{ secrets.BC_PASSWORD }}
+        run: python get_identity.py
         
