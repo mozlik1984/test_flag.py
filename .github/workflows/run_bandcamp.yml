@@ -20,11 +20,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install beautifulsoup4 curl_cffi
 
-      # ШАГ 11.1: Ищем ссылки на альбомы напрямую внутри скачанного HTML-кода
+      # ШАГ 11.2: Ищем ссылки на статьи внутри скрытого блока data-blob
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
-          from bs4 import BeautifulSoup
+          import re
+          import html
           from curl_cffi import requests as cloud_requests
 
           URL_RSS = "https://bandcamp.com"
@@ -32,42 +33,47 @@ jobs:
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.1 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.2 ---")
           try:
               res = cloud_requests.get(URL_RSS, headers=HEADERS, impersonate="chrome110", timeout=20)
               
               if res.status_code == 200 and len(res.text) > 1000:
-                  soup = BeautifulSoup(res.text, "html.parser")
+                  html_content = res.text
+                  marker = 'data-blob="'
                   
-                  # Находим абсолютно все теги ссылок <a> на странице
-                  all_links = soup.find_all("a", href=True)
-                  
-                  # Фильтруем только те, которые ведут на альбомы (содержат в адресе "/album/")
-                  album_links = [l for l in all_links if "/album/" in l["href"].lower()]
-                  print(f"1. Всего ссылок на музыкальные альбомы обнаружено: {len(album_links)}")
-                  
-                  print("\n2. Текстовое содержимое первых 5 найденных ссылок:")
-                  count = 0
-                  for link in album_links:
-                      text_clean = link.text.strip()
-                      href_clean = link["href"].strip()
-                      # Пропускаем пустые клики
-                      if text_clean and len(text_clean) > 2:
-                          print(f"   -> Текст ссылки: {text_clean} | URL: {href_clean}")
-                          count += 1
-                          if count >= 5:
-                              break
-                              
-                  if count == 0:
-                      print("   -> Ссылки со словом '/album/' найдены, но их текстовые блоки пусты.")
+                  if marker in html_content:
+                      start_idx = html_content.find(marker) + len(marker)
+                      end_idx = html_content.find('"', start_idx)
+                      
+                      raw_blob = html_content[start_idx:end_idx]
+                      clean_blob = html.unescape(raw_blob)
+                      
+                      # Ищем все ссылки на статьи внутри этого блока данных
+                      urls = re.findall(r'https://daily\.bandcamp\.com/[^\s"\\,]+', clean_blob)
+                      print(f"1. Всего ссылок на обзоры найдено в блоке: {len(urls)}")
+                      
+                      print("\n2. ПЕРВЫЕ 5 НАЙДЕННЫХ ССЫЛОК НА СТАТЬИ:")
+                      count = 0
+                      seen = set()
+                      for url in urls:
+                          # Очищаем от мусора на конце, если есть
+                          url_clean = url.split('?')[0].split('"')[0].strip()
+                          if url_clean not in seen and len(url_clean) > 30:
+                              print(f"   -> Ссылка на обзор: {url_clean}")
+                              seen.add(url_clean)
+                              count += 1
+                              if count >= 5:
+                                  break
+                  else:
+                      print("СБОЙ: Маркер data-blob не найден в HTML.")
               else:
-                  print("СБОЙ: Не удалось получить контент страницы.")
+                  print("СБОЙ: Ответ пуст.")
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 11.1: {e}")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 11.2: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем поиск ссылок
+      # Запускаем поиск внутренних ссылок
       - name: Run RSS Connection Test
         run: python test_metal.py
         
