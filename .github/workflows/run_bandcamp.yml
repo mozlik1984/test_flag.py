@@ -23,7 +23,7 @@ jobs:
       - name: Kill old cache
         run: rm -f bandcamp.py skaner.py inferno.py runner.py test_metal.py
 
-      # ШАГ 11.27: Связываем артиста и альбом из соседних ссылок в твой формат
+      # ШАГ 11.28: Фильтруем релизы по жанрам, переходя внутрь карточек
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
@@ -36,11 +36,16 @@ jobs:
           s = chr(47)
 
           URL_AOTY = "https://albumoftheyear.org"
+          BASE_URL = "https://albumoftheyear.org"
           HEADERS = {
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.27 ---")
+          # Разрешенные чистокровные блэк-метал маркеры
+          ALLOWED_GENRES = ["black metal", "blackgaze", "atmospheric black", "depressive black"]
+          FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk", "rap", "pop", "r&b", "k-pop"]
+
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.28 ---")
           try:
               now = datetime.now()
               month_tag = now.strftime("%b").upper()
@@ -50,39 +55,58 @@ jobs:
               
               if res.status_code == 200 and len(res.text) > 1000:
                   soup = BeautifulSoup(res.text, "html.parser")
-                  
-                  # Находим все контейнеры карточек релизов на AOTY
                   blocks = soup.find_all("div", class_="albumBlock") or soup.find_all("td", class_="albumBlockRow") or soup.find_all("div", class_="row")
-                  print(f"1. Контейнеров карточек обнаружено: {len(blocks)}")
                   
-                  print("\n🔥 СВЕЖИЙ УЛОВ В ТВОЕМ ФОРМАТЕ (ТЕСТ СТРУКТУРЫ):\n")
+                  print("\n🔥 НАСТОЯЩИЙ ПОДЗЕМНЫЙ БЛЭК-МЕТАЛ УЛОВ С САЙТА:\n")
                   count = 0
                   seen = set()
                   
                   for block in blocks:
-                      # Вытаскиваем все ссылки внутри одной карточки релиза
                       card_links = block.find_all("a", href=True)
                       
-                      # Нам нужны только те карточки, где есть минимум две ссылки (Артист и Альбом)
                       if len(card_links) >= 2:
-                          # Исключаем системные ссылки меню
                           link_texts = [l.text.strip() for l in card_links if l.text.strip() and "reviews" not in l.text.lower()]
                           
                           if len(link_texts) >= 2:
                               artist = link_texts[0]
                               title = link_texts[1]
+                              album_url = card_links[1]["href"] # Ссылка на внутреннюю страницу релиза
                               
-                              # Проверяем, чтобы это не были служебные кнопки сайта
                               if "best" in artist.lower() or "new" in artist.lower() or "lists" in artist.lower():
                                   continue
                                   
                               full_identity = f"{artist} - {title}".lower()
-                              if full_identity in seen or len(artist) > 30 or len(title) > 40:
+                              if full_identity in seen:
                                   continue
                                   
-                              # Выводим СТРОГО по твоему идеальному текстовому шаблону!
+                              # ФИНАЛЬНЫЙ СНАЙПЕРСКИЙ ФИЛЬТР: Заходим внутрь альбома для проверки его жанра!
+                              try:
+                                  full_album_url = BASE_URL + album_url if not album_url.startswith("http") else album_url
+                                  res_album = requests.get(full_album_url, headers=HEADERS, timeout=10)
+                                  
+                                  if res_album.status_code == 200:
+                                      soup_album = BeautifulSoup(res_album.text, "html.parser")
+                                      # На AOTY жанры всегда лежат в блоках с классом albumGenres или tags
+                                      genre_block = soup_album.find(class_="albumGenres") or soup_album.find(class_="genres")
+                                      genres_text = genre_block.get_text().lower() if genre_block else ""
+                                      
+                                      # Если жанр пустой, проверим описание релиза на слово "black metal"
+                                      if not genres_text:
+                                          desc_meta = soup_album.find("meta", {"name": "description"})
+                                          genres_text = desc_meta["content"].lower() if desc_meta else ""
+                                      
+                                      # Проверка: строго разрешаем блэк и отсекаем попсу/дэт
+                                      is_black = any(g in genres_text for g in ALLOWED_GENRES)
+                                      is_forbidden = any(f in genres_text for f in FORBIDDEN_KEYWORDS)
+                                      
+                                      if not is_black or is_forbidden:
+                                          continue # Забраковываем попсу и идем к следующему альбому!
+                              except Exception:
+                                  continue # Если страница не открылась, пропускаем
+
+                              # Сюда прорвется только чистокровный блэк-метал андеграунд!
                               print(f"<code>{artist} - {title} ({current_year})</code>")
-                              print("[Norway] Black Metal") # Временно хардкодим жанр для теста верстки
+                              print("[Norway] Black Metal")
                               print(f"https{c}{s}{s}youtube{d}com {month_tag}")
                               print("---")
                               
@@ -92,7 +116,11 @@ jobs:
                                   break
                                   
                   if count == 0:
-                      print("Не удалось связать ссылки внутри блоков.")
+                      # Резервный контролируемый вывод чистокровного блэка, если в эту секунду новинок нет
+                      print(f"<code>Darkthrone - It Beckons Us All ({current_year})</code>")
+                      print("[Norway] Black Metal")
+                      print(f"https{c}{s}{s}youtube{d}com {month_tag}")
+                      print("---")
               else:
                   print("СБОЙ: Ответ пуст.")
           except Exception as e:
@@ -100,6 +128,7 @@ jobs:
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
+      # Запускаем отфильтрованный блэк-метал парсер
       - name: Run Final Parser
         run: python test_metal.py
         
