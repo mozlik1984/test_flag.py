@@ -1,7 +1,7 @@
 name: Run Bandcamp Underground Collector
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Кнопка ручного запуска
 
 jobs:
   run-bandcamp-script:
@@ -15,102 +15,10 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests beautifulsoup4
-
-      - name: Kill old cache
-        run: rm -f bandcamp.py skaner.py inferno.py runner.py test_metal.py
-
-      # ШАГ Б.8: Форматируем живые блэк-метал релизы строго по твоей формуле
-      - name: Auto-generate python script
-        run: |
-          cat << 'EOF' > test_metal.py
-          import re
-          from datetime import datetime
-          import requests
-          from bs4 import BeautifulSoup
-
-          d = chr(46)
-          c = chr(58)
-          s = chr(47)
-
-          URL_BLOG = "https://nocleansinging.com"
-          HEADERS = {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-          }
-
-          # Ключевые слова для блэк-очистки от лишнего дэта/дума, если он проскочит
-          FORBIDDEN_KEYWORDS = ["death metal", "grindcore", "sludge", "doom metal", "thrash"]
-
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА Б.8 ---")
-          try:
-              now = datetime.now()
-              month_tag = now.strftime("%b").upper()
-              current_year = str(now.year)
-
-              res = requests.get(URL_BLOG, headers=HEADERS, timeout=20)
-              
-              if res.status_code == 200 and len(res.text) > 1000:
-                  soup = BeautifulSoup(res.text, "html.parser")
-                  headers_tags = soup.find_all("h2") or soup.find_all("h3")
-                  
-                  print("\n🔥 ЧИСТОКРОВНЫЙ БЛЭК-МЕТАЛ УЛОВ ПО ТВОЕМУ ШАБЛОНУ:\n")
-                  count = 0
-                  seen = set()
-                  
-                  for h in headers_tags:
-                      text_raw = h.get_text().strip()
-                      
-                      # Пропускаем навигационный мусор
-                      if not text_raw or len(text_raw) < 5 or "navigation" in text_raw.lower():
-                          continue
-                          
-                      if any(forbidden in text_raw.lower() for forbidden in FORBIDDEN_KEYWORDS):
-                          continue
-
-                      # Очищаем заголовки от префиксов сайта
-                      clean_line = re.sub(r'^AN NCS (PREMIERE|INTERVIEW|VIDEO PREMIERE|REVIEW)\s*:\s*', '', text_raw, flags=re.IGNORECASE)
-                      clean_line = re.sub(r'^(SHORT BUT SWEET|CLEARING THE SLATE ISSUE TWO)\s*:\s*', '', clean_line, flags=re.IGNORECASE)
-                      clean_line = clean_line.replace('“', '"').replace('”', '"').strip()
-                      
-                      if "seen and heard" in clean_line.lower():
-                          continue
-                          
-                      if clean_line.lower() in seen:
-                          continue
-
-                      # Разделяем строку на Исполнителя и Альбом по двоеточию или дефису
-                      if " : " in clean_line or ":" in clean_line:
-                          artist, title = clean_line.split(":", 1)
-                      elif " - " in clean_line:
-                          artist, title = clean_line.split(" - ", 1)
-                      else:
-                          artist = clean_line
-                          title = "Underground Release"
-
-                      # Убираем кавычки вокруг названия альбома, если они есть
-                      title = title.replace('"', '').strip()
-                      artist = artist.strip()
-
-                      # Выводим строго в твоем идеальном монолитном текстовом формате!
-                      print(f"<code>{artist} - {title} ({current_year})</code>")
-                      print("[Norway] Black Metal")
-                      print(f"https{c}{s}{s}youtube{d}com {month_tag}")
-                      print("---")
-                      
-                      seen.add(clean_line.lower())
-                      count += 1
-                      if count >= 6:
-                          break
-              else:
-                  print("СБОЙ: Ответ пуст.")
-          except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА: {e}")
-          print("--- КОНЕЦ ДИАГНОСТИКИ ---")
-          EOF
-
-      - name: Run RSS Connection Test
-        run: python test_metal.py
+      - name: Run Collector Script
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+          BANDCAMP_COOKIES: ${{ secrets.BANDCAMP_COOKIES }}
+        run: python collector.py
         
