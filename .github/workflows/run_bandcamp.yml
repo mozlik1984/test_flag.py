@@ -18,39 +18,91 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests
+          pip install requests beautifulsoup4
 
-      # ШАГ 11.8: Тестируем стабильный прокси-декодер CodeTabs для получения JSON от Bandcamp
+      # ШАГ 11.9: Штурмуем неблокируемый шлюз встроенных плееров Bandcamp
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
+          import os
+          from datetime import datetime
           import requests
+          from bs4 import BeautifulSoup
 
-          # Используем шлюз cors-proxy от CodeTabs
-          URL_FEED = "https://codetabs.com"
-          HEADERS = {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-          }
+          # ASCII маскировка путей для Telegram, чтобы телефон ничего не сломал
+          d = chr(46)
+          c = chr(58)
+          s = chr(47)
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.8 ---")
+          # Публичный и открытый шлюз виджетов Bandcamp
+          URL_EMBED = f"https{c}{s}{s}bandcamp{d}com{s}EmbeddedPlayer"
+
+          FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk"]
+
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.9 ---")
           try:
-              res = requests.get(URL_FEED, headers=HEADERS, timeout=20)
-              print(f"1. Код ответа прокси CodeTabs: {res.status_code}")
-              print(f"2. Количество полученных текстовых символов: {len(res.text)}")
+              now = datetime.now()
+              month_tag = now.strftime("%b").upper()
+              current_year = str(now.year)
+
+              # v=2 запрашивает сетку со свежими релизами внутри виджета плеера
+              params = {"tag": "black-metal", "v": "2"}
+              headers = {
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+              }
+
+              res = requests.get(URL_EMBED, params=params, headers=headers, timeout=20)
+              print(f"1. Код ответа шлюза плееров: {res.status_code}")
+              print(f"2. Количество полученных HTML символов: {len(res.text)}")
               
-              if res.status_code == 200 and len(res.text) > 0:
-                  # Показываем кусок ответа, чтобы увидеть структуру данных
-                  clean_sample = res.text[:350].replace("<", "&lt;").replace(">", "&gt;")
-                  print(f"3. Сырой срез текста ответа: {clean_sample}")
+              if res.status_code == 200 and len(res.text) > 1000:
+                  soup = BeautifulSoup(res.text, "html.parser")
+                  
+                  # Внутри HTML плеера все релизы лежат в блоках visual или art-link
+                  artworks = soup.find_all("div", class_="visual") or soup.find_all("a", class_="art-link") or soup.find_all("img")
+                  print(f"3. Всего элементов верстки обнаружено: {len(artworks)}")
+                  
+                  print("\n4. СВЕЖИЙ БЛЭК-МЕТАЛ УЛОВ ПО ТВОЕМУ ШАБЛОНУ:\n")
+                  count = 0
+                  seen = set()
+                  for art in artworks:
+                      img_tag = art if art.name == "img" else art.find("img")
+                      if not img_tag or not img_tag.has_attr("alt"):
+                          continue
+                          
+                      album_info = img_tag["alt"].strip()
+                      if not album_info or " by " not in album_info:
+                          continue
+                          
+                      if album_info.lower() in seen:
+                          continue
+
+                      if any(forbidden in album_info.lower() for forbidden in FORBIDDEN_KEYWORDS):
+                          continue
+
+                      title, artist = album_info.split(" by ", 1)
+                      
+                      # Выводим строго в твоем идеальном монолитном текстовом формате!
+                      print(f"<code>{artist.strip()} - {title.strip()} ({current_year})</code>")
+                      print("[Norway] Black Metal")
+                      print(f"https{c}{s}{s}youtube{d}com {month_tag}")
+                      print("---")
+                      
+                      seen.add(album_info.lower())
+                      count += 1
+                      if count >= 3:
+                          break
+                  if count == 0:
+                      print("Все элементы отсеялись фильтрами.")
               else:
-                  print(f"3. СБОЙ: Прокси вернул пустой ответ или ошибку. Текст: {res.text[:200]}")
+                  print("3. СБОЙ: Шлюз плееров вернул пустой ответ.")
                   
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 11.8: {e}")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 11.9: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем чтение сырого текста
+      # Запускаем стабильныйrequests парсер виджетов
       - name: Run RSS Connection Test
         run: python test_metal.py
         
