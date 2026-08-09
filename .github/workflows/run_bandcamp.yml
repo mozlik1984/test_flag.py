@@ -20,7 +20,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4
 
-      # ШАГ 11.9: Штурмуем неблокируемый шлюз встроенных плееров Bandcamp
+      # ШАГ 11.10: Сканируем открытый веб-фид блэк-метал новинок без блокировок Cloudflare
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
@@ -29,80 +29,83 @@ jobs:
           import requests
           from bs4 import BeautifulSoup
 
-          # ASCII маскировка путей для Telegram, чтобы телефон ничего не сломал
+          # ASCII маскировка путей для Telegram
           d = chr(46)
           c = chr(58)
           s = chr(47)
 
-          # Публичный и открытый шлюз виджетов Bandcamp
-          URL_EMBED = f"https{c}{s}{s}bandcamp{d}com{s}EmbeddedPlayer"
+          # Открытая веб-лента крупнейшего агрегатора релизов Bandcamp
+          URL_TG_FEED = "https://t.me"
+          HEADERS = {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+          }
 
           FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk"]
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.9 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.10 ---")
           try:
               now = datetime.now()
               month_tag = now.strftime("%b").upper()
               current_year = str(now.year)
 
-              # v=2 запрашивает сетку со свежими релизами внутри виджета плеера
-              params = {"tag": "black-metal", "v": "2"}
-              headers = {
-                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-              }
-
-              res = requests.get(URL_EMBED, params=params, headers=headers, timeout=20)
-              print(f"1. Код ответа шлюза плееров: {res.status_code}")
-              print(f"2. Количество полученных HTML символов: {len(res.text)}")
+              # Скачиваем веб-версию канала (Телеграм ГитхабActions не блокирует)
+              res = requests.get(URL_TG_FEED, headers=HEADERS, timeout=20)
+              print(f"1. Код ответа серверов Telegram: {res.status_code}")
+              print(f"2. Количество полученных текстовых символов: {len(res.text)}")
               
               if res.status_code == 200 and len(res.text) > 1000:
                   soup = BeautifulSoup(res.text, "html.parser")
                   
-                  # Внутри HTML плеера все релизы лежат в блоках visual или art-link
-                  artworks = soup.find_all("div", class_="visual") or soup.find_all("a", class_="art-link") or soup.find_all("img")
-                  print(f"3. Всего элементов верстки обнаружено: {len(artworks)}")
+                  # В веб-версии ТГ текст постов всегда лежит в блоках с этим классом
+                  posts = soup.find_all("div", class_="tgme_page_widget_inline_content") or soup.find_all("div", class_="js-message_text")
+                  print(f"3. Всего постов с релизами обнаружено: {len(posts)}")
                   
                   print("\n4. СВЕЖИЙ БЛЭК-МЕТАЛ УЛОВ ПО ТВОЕМУ ШАБЛОНУ:\n")
                   count = 0
                   seen = set()
-                  for art in artworks:
-                      img_tag = art if art.name == "img" else art.find("img")
-                      if not img_tag or not img_tag.has_attr("alt"):
+                  
+                  for post in posts:
+                      text_clean = post.get_text().strip()
+                      if not text_clean or " - " not in text_clean:
                           continue
                           
-                      album_info = img_tag["alt"].strip()
-                      if not album_info or " by " not in album_info:
+                      if any(forbidden in text_clean.lower() for forbidden in FORBIDDEN_KEYWORDS):
                           continue
                           
-                      if album_info.lower() in seen:
+                      if text_clean.lower() in seen:
                           continue
 
-                      if any(forbidden in album_info.lower() for forbidden in FORBIDDEN_KEYWORDS):
+                      # Извлекаем первую строчку поста (обычно там формат "Artist - Title")
+                      first_line = text_clean.split("\n")[0].strip()
+                      if " - " in first_line:
+                          artist, title = first_line.split(" - ", 1)
+                          # Очищаем от мусора на концах
+                          title = title.split("(")[0].strip()
+                          artist = artist.strip()
+                      else:
                           continue
 
-                      title, artist = album_info.split(" by ", 1)
-                      
                       # Выводим строго в твоем идеальном монолитном текстовом формате!
-                      print(f"<code>{artist.strip()} - {title.strip()} ({current_year})</code>")
+                      print(f"<code>{artist} - {title} ({current_year})</code>")
                       print("[Norway] Black Metal")
                       print(f"https{c}{s}{s}youtube{d}com {month_tag}")
                       print("---")
                       
-                      seen.add(album_info.lower())
+                      seen.add(text_clean.lower())
                       count += 1
-                      if count >= 3:
+                      if count >= 5:
                           break
                   if count == 0:
-                      print("Все элементы отсеялись фильтрами.")
+                      print("Все релизы из текущей ленты постов отсеялись фильтрами.")
               else:
-                  print("3. СБОЙ: Шлюз плееров вернул пустой ответ.")
+                  print("3. СБОЙ: Сервер вернул пустой ответ.")
                   
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 11.9: {e}")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 11.10: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем стабильныйrequests парсер виджетов
+      # Запускаемrequests парсер ТГ-ленты
       - name: Run RSS Connection Test
         run: python test_metal.py
         
