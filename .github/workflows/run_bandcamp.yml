@@ -23,11 +23,10 @@ jobs:
       - name: Kill old cache
         run: rm -f bandcamp.py skaner.py inferno.py runner.py test_metal.py
 
-      # Нарезаем монолитный XML по элементам перед сканированием
+      # ШАГ Б.6: Печатаем 10 сырых строк из середины фида для изучения тегов
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
-          import re
           import requests
 
           URL_BLOG = "https://nocleansinging.com"
@@ -35,38 +34,26 @@ jobs:
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ПОПЫТКИ Б.5 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА Б.6 ---")
           try:
               res = requests.get(URL_BLOG, headers=HEADERS, timeout=20)
-              print(f"1. Код ответа метал-портала: {res.status_code}")
-              print(f"2. Количество полученных символов: {len(res.text)}")
               
               if res.status_code == 200 and len(res.text) > 1000:
-                  # Режем сплошную строку на отдельные части по тегу </item>
                   clean_text = res.text.replace("</item>", "</item>\n")
                   lines = clean_text.split("\n")
-                  print(f"3. Текст успешно нарезан на {len(lines)} строк!")
+                  print(f"1. Текст успешно нарезан на {len(lines)} строк!")
                   
-                  print("\n4. НАСТОЯЩИЕ ТЯЖЕЛЫЕ РЕЛИЗЫ, НАЙДЕННЫЕ В СТРОКАХ:")
-                  count = 0
-                  for line in lines:
-                      match = re.search(r'<title[^>]*>(.*?)</title>', line, re.IGNORECASE)
-                      if match:
-                          title_clean = match.group(1).replace("<![CDATA[", "").replace("]]>", "").strip()
-                          if "no clean singing" in title_clean.lower() or len(title_clean) < 5:
-                              continue
-                              
-                          print(f"   -> Найдена метал-статья: {title_clean}")
-                          count += 1
-                          if count >= 10:
-                              break
-                              
-                  if count == 0:
-                      print("В нарезанных строках заголовки не обнаружены.")
+                  print("\n2. СЫРОЙ КОД СТРОК ДЛЯ ИЗУЧЕНИЯ ТЕГОВ ПОРТАЛА:")
+                  # Берем 10 строк из середины, где лежат реальные музыкальные посты
+                  for idx, line in enumerate(lines[4:14]):
+                      # Заменяем угловые скобки, чтобы GitHub не скрыл их как HTML-теги
+                      clean_line = line.replace("<", "&lt;").replace(">", "&gt;").strip()
+                      # Показываем только начало строки, чтобы лог не раздувался
+                      print(f"   [Строка {idx+5}]: {clean_line[:180]}")
               else:
-                  print("3. СБОЙ: Ответ пуст.")
+                  print("СБОЙ: Ответ пуст.")
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ Б.5: {e}")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
