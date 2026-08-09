@@ -20,21 +20,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4
 
-      # ШАГ 11.10: Сканируем открытый веб-фид блэк-метал новинок без блокировок Cloudflare
+      # ШАГ 11.11: Вытаскиваем текстовые строки релизов через регулярные выражения
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
-          import os
+          import re
           from datetime import datetime
           import requests
           from bs4 import BeautifulSoup
 
-          # ASCII маскировка путей для Telegram
           d = chr(46)
           c = chr(58)
           s = chr(47)
 
-          # Открытая веб-лента крупнейшего агрегатора релизов Bandcamp
           URL_TG_FEED = "https://t.me"
           HEADERS = {
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -42,47 +40,46 @@ jobs:
 
           FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk"]
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.10 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.11 ---")
           try:
               now = datetime.now()
               month_tag = now.strftime("%b").upper()
               current_year = str(now.year)
 
-              # Скачиваем веб-версию канала (Телеграм ГитхабActions не блокирует)
               res = requests.get(URL_TG_FEED, headers=HEADERS, timeout=20)
-              print(f"1. Код ответа серверов Telegram: {res.status_code}")
-              print(f"2. Количество полученных текстовых символов: {len(res.text)}")
               
               if res.status_code == 200 and len(res.text) > 1000:
-                  soup = BeautifulSoup(res.text, "html.parser")
+                  # Ищем любые текстовые куски внутри сообщений, содержащие разделитель " - "
+                  # Извлекаем текст между HTML-тегами div
+                  raw_lines = re.findall(r'dir="auto">(.*?)</div>', res.text) or re.findall(r'class="[^"]*text[^"]*">(.*?)</div>', res.text)
+                  print(f"1. Всего сырых текстовых строк извлечено из HTML: {len(raw_lines)}")
                   
-                  # В веб-версии ТГ текст постов всегда лежит в блоках с этим классом
-                  posts = soup.find_all("div", class_="tgme_page_widget_inline_content") or soup.find_all("div", class_="js-message_text")
-                  print(f"3. Всего постов с релизами обнаружено: {len(posts)}")
-                  
-                  print("\n4. СВЕЖИЙ БЛЭК-МЕТАЛ УЛОВ ПО ТВОЕМУ ШАБЛОНУ:\n")
+                  print("\n2. СВЕЖИЙ БЛЭК-МЕТАЛ УЛОВ ПО ТВОЕМУ ШАБЛОНУ:\n")
                   count = 0
                   seen = set()
                   
-                  for post in posts:
-                      text_clean = post.get_text().strip()
+                  for line in raw_lines:
+                      # Очищаем строку от внутренних HTML-тегов, если они проскочили
+                      soup_clean = BeautifulSoup(line, "html.parser")
+                      text_clean = soup_clean.get_text().strip()
+                      
                       if not text_clean or " - " not in text_clean:
                           continue
                           
                       if any(forbidden in text_clean.lower() for forbidden in FORBIDDEN_KEYWORDS):
                           continue
                           
-                      if text_clean.lower() in seen:
-                          continue
-
-                      # Извлекаем первую строчку поста (обычно там формат "Artist - Title")
+                      # Берем первую строчку релиза
                       first_line = text_clean.split("\n")[0].strip()
                       if " - " in first_line:
                           artist, title = first_line.split(" - ", 1)
-                          # Очищаем от мусора на концах
                           title = title.split("(")[0].strip()
                           artist = artist.strip()
                       else:
+                          continue
+                          
+                      full_identity = f"{artist} - {title}".lower()
+                      if full_identity in seen or len(artist) > 30 or len(title) > 40:
                           continue
 
                       # Выводим строго в твоем идеальном монолитном текстовом формате!
@@ -91,21 +88,21 @@ jobs:
                       print(f"https{c}{s}{s}youtube{d}com {month_tag}")
                       print("---")
                       
-                      seen.add(text_clean.lower())
+                      seen.add(full_identity)
                       count += 1
                       if count >= 5:
                           break
                   if count == 0:
-                      print("Все релизы из текущей ленты постов отсеялись фильтрами.")
+                      print("Все извлеченные строки отсеялись фильтрами поджанров.")
               else:
-                  print("3. СБОЙ: Сервер вернул пустой ответ.")
+                  print("СБОЙ: Лента пуста.")
                   
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 11.10: {e}")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 11.11: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаемrequests парсер ТГ-ленты
+      # Запускаем текстовый регулярный сканер
       - name: Run RSS Connection Test
         run: python test_metal.py
         
