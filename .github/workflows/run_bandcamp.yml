@@ -18,51 +18,61 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests
+          pip install requests beautifulsoup4
 
-      # ШАГ 11.12: Изучаем теги сообщений Телеграма вокруг дефиса
+      # ШАГ 11.13: Тестируем открытое RSS-зеркало Телеграм-ленты релизов
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
           import requests
+          from bs4 import BeautifulSoup
 
-          URL_TG_FEED = "https://t.me"
+          # Открытый и неблокируемый RSS-мост для чтения постов канала
+          URL_RSS_BRIDGE = "https://rsshub.app"
           HEADERS = {
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.12 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.13 ---")
           try:
-              res = requests.get(URL_TG_FEED, headers=HEADERS, timeout=20)
-              print(f"1. Код ответа серверов Telegram: {res.status_code}")
-              print(f"2. Количество символов в коде: {len(res.text)}")
+              # Делаем обычный GET запрос к шлюзу-зеркалу
+              res = requests.get(URL_RSS_BRIDGE, headers=HEADERS, timeout=20)
+              print(f"1. Код ответа RSS-зеркала: {res.status_code}")
+              print(f"2. Количество полученных символов XML: {len(res.text)}")
               
-              if res.status_code == 200 and len(res.text) > 1000:
-                  html = res.text
+              if res.status_code == 200 and len(res.text) > 500:
+                  print("3. УСПЕХ: Лента постов успешно скачана через зеркало!")
+                  soup = BeautifulSoup(res.text, "html.parser")
                   
-                  # Ищем первый попавшийся дефис с пробелами, который разделяет исполнителя и альбом
-                  marker = " - "
-                  if marker in html:
-                      print("3. УСПЕХ: Музыкальный маркер ' - ' успешно обнаружен в коде страницы!")
-                      idx = html.find(marker)
-                      
-                      # Вырезаем кусок кода вокруг дефиса
-                      raw_chunk = html[idx-150:idx+200]
-                      # Заменяем скобки, чтобы GitHub логов не скрыл их
-                      clean_chunk = raw_chunk.replace("<", "&lt;").replace(">", "&gt;")
-                      
-                      print("\n4. СЫРОЙ КУСОК КОДА ДЛЯ АНАЛИЗА ТЕГОВ ТЕЛЕГРАМА:")
-                      print(clean_chunk)
-                  else:
-                      print("3. СБОЙ: Маркер ' - ' не найден в коде страницы. Лента пуста.")
+                  # В RSS лентах все заголовки постов всегда лежат в тегах <title>
+                  titles = soup.find_all("title")
+                  print(f"4. Всего заголовков (релизов) найдено в фиде: {len(titles)}")
+                  
+                  print("\n5. СЫРЫЕ СТРОКИ ПЕРВЫХ 3 РЕЛИЗОВ:")
+                  count = 0
+                  for t in titles:
+                      text_clean = t.text.strip()
+                      # Пропускаем главный заголовок самого канала
+                      if "telegram" in text_clean.lower() or "releases" in text_clean.lower():
+                          continue
+                      print(f"   -> Строка: {text_clean}")
+                      count += 1
+                      if count >= 3:
+                          break
               else:
-                  print("СБОЙ: Не удалось загрузить страницу.")
+                  # Если официальный rsshub перегружен, проверим альтернативный шлюз
+                  print("3. СБОЙ: Главный шлюз вернул ошибку или пустой ответ. Пробуем альтернативный...")
+                  alt_url = "https://rssfeed.wtf"
+                  res_alt = requests.get(alt_url, headers=HEADERS, timeout=15)
+                  print(f"   -> Код ответа альтернативного моста: {res_alt.status_code}")
+                  print(f"   -> Вес символов альтернативного моста: {len(res_alt.text)}")
+                  
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА: {e}")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 11.13: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем чтение кода вокруг дефиса
+      # Запускаем проверку связи с RSS-мостом
       - name: Run RSS Connection Test
         run: python test_metal.py
         
