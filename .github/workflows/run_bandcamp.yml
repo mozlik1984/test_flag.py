@@ -18,42 +18,52 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests
+          pip install requests beautifulsoup4
 
       - name: Kill old cache
         run: rm -f bandcamp.py skaner.py inferno.py runner.py test_metal.py
 
-      # ШАГ Б.6: Печатаем 10 сырых строк из середины фида для изучения тегов
+      # ШАГ Б.7: Вытаскиваем заголовки статей из HTML тегов h2 и h3
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
           import requests
+          from bs4 import BeautifulSoup
 
           URL_BLOG = "https://nocleansinging.com"
           HEADERS = {
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА Б.6 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА Б.7 ---")
           try:
               res = requests.get(URL_BLOG, headers=HEADERS, timeout=20)
               
               if res.status_code == 200 and len(res.text) > 1000:
-                  clean_text = res.text.replace("</item>", "</item>\n")
-                  lines = clean_text.split("\n")
-                  print(f"1. Текст успешно нарезан на {len(lines)} строк!")
+                  soup = BeautifulSoup(res.text, "html.parser")
                   
-                  print("\n2. СЫРОЙ КОД СТРОК ДЛЯ ИЗУЧЕНИЯ ТЕГОВ ПОРТАЛА:")
-                  # Берем 10 строк из середины, где лежат реальные музыкальные посты
-                  for idx, line in enumerate(lines[4:14]):
-                      # Заменяем угловые скобки, чтобы GitHub не скрыл их как HTML-теги
-                      clean_line = line.replace("<", "&lt;").replace(">", "&gt;").strip()
-                      # Показываем только начало строки, чтобы лог не раздувался
-                      print(f"   [Строка {idx+5}]: {clean_line[:180]}")
+                  # Находим все заголовки h2 и h3 на скачанной странице блога
+                  headers_tags = soup.find_all("h2") or soup.find_all("h3") or soup.find_all("h1")
+                  print(f"1. Всего заголовков статей обнаружено на странице: {len(headers_tags)}")
+                  
+                  print("\n2. НАСТОЯЩИЕ НАЗВАНИЯ ОБЗОРОВ С ГЛАВНОЙ СТРАНИЦЫ МЕТАЛ-ПОРТАЛА:")
+                  count = 0
+                  for h in headers_tags:
+                      text_clean = h.get_text().strip()
+                      if not text_clean or len(text_clean) < 5 or "navigation" in text_clean.lower():
+                          continue
+                          
+                      print(f"   -> Найдена статья: {text_clean}")
+                      count += 1
+                      if count >= 10:
+                          break
+                          
+                  if count == 0:
+                      print("Теги заголовков найдены, но их текстовое содержимое пусто.")
               else:
                   print("СБОЙ: Ответ пуст.")
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА: {e}")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ Б.7: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
