@@ -18,81 +18,55 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests
+          pip install requests curl_cffi
 
-      # ШАГ 12: Получаем чистокровный блэк-метал через открытый шлюз автоматизации
+      # ШАГ 11.20: Вытаскиваем текстовые музыкальные заголовки напрямую из рабочего HTML
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
-          import os
-          from datetime import datetime
-          import requests
+          import re
+          from curl_cffi import requests as cloud_requests
 
-          # Открытый шлюз релизов (свободный доступ для GitHub Actions)
-          URL_API = "https://musicbrainz.org"
-          
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 12 ---")
+          # Наш единственный рабочий адрес, который отдает 110 тысяч символов контента
+          URL_DAILY = "https://bandcamp.com"
+          HEADERS = {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          }
+
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.20 ---")
           try:
-              now = datetime.now()
-              month_tag = now.strftime("%b").upper()
-              current_year = str(now.year)
-
-              # Ищем релизы по строгому жанру блэк-металла за текущий год
-              # Указываем в запросе площадку bandcamp, чтобы вытащить только их релизы!
-              query = f'tag:"black metal" AND comment:"bandcamp" AND date:{current_year}'
-              params = {"query": query, "fmt": "json", "limit": 20}
-              headers = {"User-Agent": "BlackMetalHubCollector/3.0.0 (contact@metalhub.local)"}
-
-              res = requests.get(URL_API, params=params, headers=headers, timeout=20)
-              print(f"1. Код ответа открытого шлюза: {res.status_code}")
+              res = cloud_requests.get(URL_DAILY, headers=HEADERS, impersonate="chrome110", timeout=20)
+              print(f"1. Код ответа сервера: {res.status_code}")
+              print(f"2. Количество символов в коде: {len(res.text)}")
               
-              if res.status_code == 200:
-                  data = res.json()
-                  releases = data.get("releases", [])
-                  print(f"2. УСПЕХ: Живых релизов извлечено из базы: {len(releases)}")
+              if res.status_code == 200 and len(res.text) > 1000:
+                  # Ищем регуляркой структуру "title":"Любой Текст" внутри JavaScript-блоков страницы
+                  raw_titles = re.findall(r'"title"\s*:\s*"([^"]*)"', res.text)
+                  print(f"3. Всего скрытых текстовых заголовков обнаружено: {len(raw_titles)}")
                   
-                  print("\n🔥 СВЕЖИЙ БЛЭК-МЕТАЛ УЛОВ ПО ТВОЕМУ ШАБЛОНУ:\n")
-                  
+                  print("\n4. ПЕРВЫЕ 10 НАЙДЕННЫХ СТРОК С САЙТА:")
                   count = 0
-                  for rel in releases:
-                      title = rel.get("title", "Unknown Album").strip()
-                      
-                      artist_credit = rel.get("artist-credit", [])
-                      artist = artist_credit[0].get("name", "Unknown Artist").strip() if artist_credit else "Unknown Artist"
-                      
-                      if "unknown" in artist.lower() or "unknown" in title.lower():
+                  for t in raw_titles:
+                      title_clean = t.strip()
+                      # Пропускаем служебный мусор
+                      if "bandcamp" in title_clean.lower() or len(title_clean) < 4:
                           continue
-
-                      # Автоматически определяем страну издания
-                      location = "Norway"
-                      release_events = rel.get("release-events", [])
-                      if release_events:
-                          location = release_events[0].get("area", {}).get("name", "Norway")
-
-                      # Выводим строго в твоем идеальном монолитном текстовом формате!
-                      print(f"<code>{artist} - {title} ({current_year})</code>")
-                      print(f"[{location}] Black Metal")
-                      print(f"https://youtube.com {month_tag}")
-                      print("---")
-                      
+                          
+                      print(f"   -> Строка из базы сайта: {title_clean}")
                       count += 1
                       if count >= 10:
                           break
                           
                   if count == 0:
-                      # Если на эту секунду новых поступлений в индексе нет, выводим проверочный эталон
-                      print(f"<code>Darkthrone - It Beckons Us All ({current_year})</code>")
-                      print("[Norway] Black Metal")
-                      print(f"https://youtube.com {month_tag}")
-                      print("---")
+                      print("В верстке страницы маркеры '\"title\":\"' не найдены.")
               else:
-                  print(f"СБОЙ ШЛЮЗА: Код {res.status_code}")
+                  print("СБОЙ: Ответ пуст.")
           except Exception as e:
               print(f"КРИТИЧЕСКАЯ ОШИБКА: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем стабильный сборщик данных
+      # Запускаем текстовый сканер скрытых заголовков
       - name: Run RSS Connection Test
         run: python test_metal.py
         
