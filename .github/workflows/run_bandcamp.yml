@@ -18,61 +18,38 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests beautifulsoup4
+          pip install requests
 
-      # ШАГ 11.13: Тестируем открытое RSS-зеркало Телеграм-ленты релизов
+      # ШАГ 11.14: Читаем сырой текст ошибки 403 для точной настройки сетевого обхода
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
           import requests
-          from bs4 import BeautifulSoup
 
-          # Открытый и неблокируемый RSS-мост для чтения постов канала
           URL_RSS_BRIDGE = "https://rsshub.app"
           HEADERS = {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.13 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.14 ---")
           try:
-              # Делаем обычный GET запрос к шлюзу-зеркалу
               res = requests.get(URL_RSS_BRIDGE, headers=HEADERS, timeout=20)
-              print(f"1. Код ответа RSS-зеркала: {res.status_code}")
-              print(f"2. Количество полученных символов XML: {len(res.text)}")
+              print(f"1. Код ответа сервера: {res.status_code}")
+              print(f"2. Количество символов в ответе: {len(res.text)}")
               
-              if res.status_code == 200 and len(res.text) > 500:
-                  print("3. УСПЕХ: Лента постов успешно скачана через зеркало!")
-                  soup = BeautifulSoup(res.text, "html.parser")
-                  
-                  # В RSS лентах все заголовки постов всегда лежат в тегах <title>
-                  titles = soup.find_all("title")
-                  print(f"4. Всего заголовков (релизов) найдено в фиде: {len(titles)}")
-                  
-                  print("\n5. СЫРЫЕ СТРОКИ ПЕРВЫХ 3 РЕЛИЗОВ:")
-                  count = 0
-                  for t in titles:
-                      text_clean = t.text.strip()
-                      # Пропускаем главный заголовок самого канала
-                      if "telegram" in text_clean.lower() or "releases" in text_clean.lower():
-                          continue
-                      print(f"   -> Строка: {text_clean}")
-                      count += 1
-                      if count >= 3:
-                          break
+              if len(res.text) > 0:
+                  # Заменяем скобки, чтобы GitHub логов не скрыл их как HTML-теги
+                  clean_sample = res.text[:500].replace("<", "&lt;").replace(">", "&gt;")
+                  print(f"\n3. СЫРОЙ СРЕЗ ТЕКСТА ОШИБКИ ДЛЯ АНАЛИЗА ЗАЩИТЫ:\n{clean_sample}")
               else:
-                  # Если официальный rsshub перегружен, проверим альтернативный шлюз
-                  print("3. СБОЙ: Главный шлюз вернул ошибку или пустой ответ. Пробуем альтернативный...")
-                  alt_url = "https://rssfeed.wtf"
-                  res_alt = requests.get(alt_url, headers=HEADERS, timeout=15)
-                  print(f"   -> Код ответа альтернативного моста: {res_alt.status_code}")
-                  print(f"   -> Вес символов альтернативного моста: {len(res_alt.text)}")
+                  print("3. СБОЙ: Сервер вернул абсолютно пустой ответ.")
                   
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 11.13: {e}")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем проверку связи с RSS-мостом
+      # Запускаем чтение сырого текста ошибки
       - name: Run RSS Connection Test
         run: python test_metal.py
         
