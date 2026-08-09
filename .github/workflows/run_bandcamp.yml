@@ -20,11 +20,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4
 
-      # ШАГ 11.18: Переводим разбор на безопасные регулярные выражения re.search
+      # ШАГ 11.19: Печатаем сырые заголовки без единого фильтра
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
-          import re
           import urllib.parse
           from datetime import datetime
           import requests
@@ -35,9 +34,7 @@ jobs:
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
-          FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk"]
-
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.17 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.19 ---")
           try:
               now = datetime.now()
               month_tag = now.strftime("%b").upper()
@@ -53,69 +50,19 @@ jobs:
                   soup = BeautifulSoup(res.text, "html.parser")
                   titles = soup.find_all("title")
                   
-                  print("\n🔥 СВЕЖИЙ БЛЭК-МЕТАЛ УЛОВ ПО ТВОЕМУ ШАБЛОНУ:\n")
+                  print(f"Всего тегов title найдено в XML: {len(titles)}")
+                  print("\n4. СЫРОЙ ТЕКСТ ПЕРВЫХ 15 ЗАГОЛОВКОВ:")
                   
-                  count = 0
-                  seen = set()
-                  for t in titles:
-                      text_raw = t.text.strip()
-                      
-                      if "google news" in text_raw.lower() or len(text_raw) < 10:
-                          continue
-                          
-                      if any(forbidden in text_raw.lower() for forbidden in FORBIDDEN_KEYWORDS):
-                          continue
-                          
-                      if text_raw.lower() in seen:
-                          continue
-
-                      # ЖЕСТКОЕ ПРАВИЛО: Вытаскиваем "Исполнитель - Альбом" регуляркой
-                      # Ищем структуру, где текст разделен дефисом или вертикальной чертой
-                      match = re.search(r'([^|-]+)\s*[|-]\s*([^|-]+)', text_raw)
-                      
-                      if match:
-                          part1 = match.group(1).strip()
-                          part2 = match.group(2).strip()
-                          
-                          # Чистим от системных хвостов Bandcamp
-                          if "bandcamp" in part1.lower():
-                              artist = "Underground Artist"
-                              title = part2
-                          elif "bandcamp" in part2.lower():
-                              artist = part1
-                              title = part2.replace("Bandcamp", "").replace("|", "").strip()
-                          else:
-                              artist = part1
-                              title = part2
-                              
-                          # Если строка всё ещё содержит мусор, пропускаем этот элемент и идем к следующему!
-                          if len(artist) < 2 or len(title) < 2 or "google" in artist.lower() or "google" in title.lower():
-                              continue
-                              
-                          print(f"<code>{artist} - {title} ({current_year})</code>")
-                          print("[Norway] Black Metal")
-                          print(f"https://youtube.com {month_tag}")
-                          print("---")
-                          
-                          seen.add(text_raw.lower())
-                          count += 1
-                          if count >= 10:
-                              break
-                              
-                  if count == 0:
-                      # Резервный контролируемый вывод
-                      print(f"<code>Underground Artist - Google ({current_year})</code>")
-                      print("[Norway] Black Metal")
-                      print(f"https://youtube.com {month_tag}")
-                      print("---")
+                  for idx, t in enumerate(titles[:15]):
+                      print(f"   [{idx+1}] -> {t.text.strip()}")
               else:
-                  print("СБОЙ: Шлюз вернул пустой ответ.")
+                  print("СБОЙ: Ответ пуст.")
           except Exception as e:
               print(f"КРИТИЧЕСКАЯ ОШИБКА: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем регулярный текстовый рендеринг
+      # Запускаем сырой вывод заголовков
       - name: Run RSS Connection Test
         run: python test_metal.py
         
