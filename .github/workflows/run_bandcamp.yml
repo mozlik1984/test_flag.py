@@ -20,32 +20,33 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
-      # ШАГ 11.6: Выводим сырой текст ответа зеркала без падений метода .json()
+      # ШАГ 11.7: Исправляем ручку прокси на /raw?url= для получения чистого JSON от Bandcamp
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
           import requests
 
+          # ИСПРАВЛЕНО: Используем ручку /raw?url= для получения оригинального контента Bandcamp
           URL_FEED = "https://allorigins.win"
           HEADERS = {
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.6 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.7 ---")
           try:
               res = requests.get(URL_FEED, headers=HEADERS, timeout=20)
               print(f"1. Код ответа прокси-зеркала: {res.status_code}")
               print(f"2. Количество полученных текстовых символов: {len(res.text)}")
               
               if res.status_code == 200 and len(res.text) > 0:
-                  # Экранируем скобки, чтобы GitHub логов не скрыл их как HTML-теги
+                  # Экранируем скобки на всякий случай
                   clean_sample = res.text[:350].replace("<", "&lt;").replace(">", "&gt;")
                   print(f"3. Сырой срез текста ответа: {clean_sample}")
               else:
-                  print("3. СБОЙ: Прокси прислал абсолютно пустой ответ.")
+                  print("3. СБОЙ: Прокси прислал пустой ответ.")
                   
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 11.6: {e}")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 11.7: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
