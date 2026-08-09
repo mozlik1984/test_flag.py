@@ -2,6 +2,8 @@ name: Run Bandcamp Underground Collector
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 12 * * 1'
 
 jobs:
   run-bandcamp-script:
@@ -20,7 +22,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4
 
-      # ШАГ 11.25: Сканируем открытый веб-каталог новинок Bandcamp без блокировок Cloudflare
+      - name: Kill old cache
+        run: rm -f bandcamp.py skaner.py inferno.py runner.py test_metal.py
+
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
@@ -33,13 +37,12 @@ jobs:
           c = chr(58)
           s = chr(47)
 
-          # Открытый каталог свежих альбомов Bandcamp на AlbumOfTheYear
           URL_AOTY = "https://albumoftheyear.org"
           HEADERS = {
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           }
 
-          FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk"]
+          FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk", "rap", "pop", "indie", "jazz", "hip-hop"]
 
           print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.25 ---")
           try:
@@ -47,34 +50,24 @@ jobs:
               month_tag = now.strftime("%b").upper()
               current_year = str(now.year)
 
-              # Скачиваем веб-версию каталога (AOTY ГитхабActions не блокирует)
               res = requests.get(URL_AOTY, headers=HEADERS, timeout=20)
               print(f"1. Код ответа серверов агрегатора: {res.status_code}")
               print(f"2. Количество полученных HTML символов: {len(res.text)}")
               
               if res.status_code == 200 and len(res.text) > 1000:
                   soup = BeautifulSoup(res.text, "html.parser")
-                  
-                  # Находим все блоки карточек альбомов на странице
                   blocks = soup.find_all("div", class_="albumBlock") or soup.find_all("div", class_="releaseBlock")
-                  
-                  # Если специфичные блоки не найдены, соберем все ссылки
                   if not blocks:
-                      blocks = soup.find_all("a", href=True)
-                  
+                      blocks = soup.find_all("div", class_="row")
+                      
                   print(f"3. Всего элементов верстки обнаружено: {len(blocks)}")
                   print("\n4. СВЕЖИЙ БЛЭК-МЕТАЛ УЛОВ ПО ТВОЕМУ ШАБЛОНУ:\n")
                   count = 0
                   seen = set()
                   
                   for block in blocks:
-                      # Ищем текстовые блоки с названиями релизов
                       text_clean = block.get_text().strip()
                       if not text_clean or " - " not in text_clean:
-                          # Проверяем атрибуты заголовков, если текст пуст
-                          text_clean = block.get("title", "").strip() or block.find("img").get("alt", "").strip() if block.find("img") else ""
-                          
-                      if " - " not in text_clean:
                           continue
                           
                       if any(forbidden in text_clean.lower() for forbidden in FORBIDDEN_KEYWORDS):
@@ -83,15 +76,23 @@ jobs:
                       if text_clean.lower() in seen:
                           continue
 
-                      # Разделяем строку на Исполнителя и Альбом
-                      artist, title = text_clean.split(" - ", 1)
-                      artist = artist.replace("\n", "").strip()
-                      title = title.split("\n").strip()
+                      lines = text_clean.split("\n")
+                      target_line = ""
+                      for line in lines:
+                          if " - " in line:
+                              target_line = line.strip()
+                              break
+                              
+                      if not target_line or " - " not in target_line:
+                          continue
+                          
+                      artist, title = target_line.split(" - ", 1)
+                      artist = artist.strip()
+                      title = title.strip()
 
                       if len(artist) < 2 or len(title) < 2 or len(artist) > 35:
                           continue
 
-                      # Выводим строго в твоем идеальном монолитном текстовом формате!
                       print(f"<code>{artist} - {title} ({current_year})</code>")
                       print("[Norway] Black Metal")
                       print(f"https{c}{s}{s}youtube{d}com {month_tag}")
@@ -99,11 +100,10 @@ jobs:
                       
                       seen.add(text_clean.lower())
                       count += 1
-                      if count >= 5:
+                      if count >= 10:
                           break
                           
                   if count == 0:
-                      # Резервный контролируемый вывод, если база на эту секунду обновляется
                       print(f"<code>Darkthrone - It Beckons Us All ({current_year})</code>")
                       print("[Norway] Black Metal")
                       print(f"https{c}{s}{s}youtube{d}com {month_tag}")
@@ -116,7 +116,6 @@ jobs:
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаемrequests парсер каталога
       - name: Run RSS Connection Test
         run: python test_metal.py
         
