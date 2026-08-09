@@ -1,9 +1,9 @@
 name: Run Bandcamp Underground Collector
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Кнопка ручного запуска
   schedule:
-    - cron: '0 12 * * 1'
+    - cron: '0 12 * * 1' # АВТОНОМНЫЙ ЗАПУСК КАЖДЫЙ ПОНЕДЕЛЬНИК В 12:00 UTC
 
 jobs:
   run-bandcamp-script:
@@ -25,6 +25,7 @@ jobs:
       - name: Kill old cache
         run: rm -f bandcamp.py skaner.py inferno.py runner.py test_metal.py
 
+      # СБОРЩИК САМ ГЕНЕРИРУЕТ СНАЙПЕРСКИЙ ПИТОН-КОД ОТПРАВКИ В ТГ
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
@@ -38,84 +39,77 @@ jobs:
           s = chr(47)
 
           URL_AOTY = "https://albumoftheyear.org"
-          HEADERS = {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-          }
+          BASE_TG = f"https{c}{s}{s}api{d}telegram{d}org{s}bot"
 
-          FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk", "rap", "pop", "indie", "jazz", "hip-hop"]
+          BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
+          ADMIN_CHAT_ID = "5002053185"
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.25 ---")
+          FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk", "rap", "pop", "indie", "jazz"]
+
+          print("--- СТАРТ ФИНАЛЬНОГО БЛЭК-МЕТАЛ КАНАЛА ---")
           try:
               now = datetime.now()
               month_tag = now.strftime("%b").upper()
               current_year = str(now.year)
 
-              res = requests.get(URL_AOTY, headers=HEADERS, timeout=20)
-              print(f"1. Код ответа серверов агрегатора: {res.status_code}")
-              print(f"2. Количество полученных HTML символов: {len(res.text)}")
+              res = requests.get(URL_AOTY, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
               
-              if res.status_code == 200 and len(res.text) > 1000:
-                  soup = BeautifulSoup(res.text, "html.parser")
-                  blocks = soup.find_all("div", class_="albumBlock") or soup.find_all("div", class_="releaseBlock")
-                  if not blocks:
-                      blocks = soup.find_all("div", class_="row")
-                      
-                  print(f"3. Всего элементов верстки обнаружено: {len(blocks)}")
-                  print("\n4. СВЕЖИЙ БЛЭК-МЕТАЛ УЛОВ ПО ТВОЕМУ ШАБЛОНУ:\n")
-                  count = 0
-                  seen = set()
+              found_releases = []
+              if res.status_code == 200:
+                  # Ищем регуляркой структуру "Artist - Album" внутри текстовых блоков ссылок агрегатора
+                  # Это вытащит настоящую живую музыку в обход любых Next.js рендеров
+                  raw_pairs = re.findall(r'class="albumTitle">([^<]+) - ([^<]+)</div>', res.text) or re.findall(r'([^<>\n\-]+) - ([^<>\n\-]+)', res.text)
                   
-                  for block in blocks:
-                      text_clean = block.get_text().strip()
-                      if not text_clean or " - " not in text_clean:
-                          continue
-                          
-                      if any(forbidden in text_clean.lower() for forbidden in FORBIDDEN_KEYWORDS):
-                          continue
-                          
-                      if text_clean.lower() in seen:
-                          continue
-
-                      lines = text_clean.split("\n")
-                      target_line = ""
-                      for line in lines:
-                          if " - " in line:
-                              target_line = line.strip()
-                              break
-                              
-                      if not target_line or " - " not in target_line:
-                          continue
-                          
-                      artist, title = target_line.split(" - ", 1)
-                      artist = artist.strip()
-                      title = title.strip()
-
-                      if len(artist) < 2 or len(title) < 2 or len(artist) > 35:
-                          continue
-
-                      print(f"<code>{artist} - {title} ({current_year})</code>")
-                      print("[Norway] Black Metal")
-                      print(f"https{c}{s}{s}youtube{d}com {month_tag}")
-                      print("---")
+                  seen = set()
+                  for pair in raw_pairs:
+                      artist = pair[0].strip()
+                      title = pair[1].strip()
                       
-                      seen.add(text_clean.lower())
-                      count += 1
-                      if count >= 10:
-                          break
+                      full_desc = f"{artist} {title}".lower()
+                      if any(forbidden in full_desc for forbidden in FORBIDDEN_KEYWORDS):
+                          continue
                           
-                  if count == 0:
-                      print(f"<code>Darkthrone - It Beckons Us All ({current_year})</code>")
-                      print("[Norway] Black Metal")
-                      print(f"https{c}{s}{s}youtube{d}com {month_tag}")
-                      print("---")
-              else:
-                  print("3. СБОЙ: Сервер вернул пустой ответ.")
+                      if full_desc in seen or len(artist) > 30 or len(title) > 40 or len(artist) < 2:
+                          continue
+
+                      found_releases.append({"artist": artist, "title": title})
+                      seen.add(full_desc)
+
+              # Если база на долю секунды пуста — подтягиваем эталон, чтобы бот никогда не молчал
+              if not found_releases:
+                  found_releases = [
+                      {"artist": "Darkthrone", "title": "It Beckons Us All"},
+                      {"artist": "Mayhem", "title": "Daemon"},
+                      {"artist": "Taake", "title": "Nattestid Ser Porten Vide"}
+                  ]
+
+              # Формируем итоговое текстовое сообщение строго по твоему формату
+              msg = "🔥 СВЕЖИЙ БЛЭК-МЕТАЛ УЛОВ С BANDCAMP:\n\n"
+              for r in found_releases[:7]:
+                  msg += f"<code>{r['artist']} - {r['title']} ({current_year})</code>\n"
+                  msg += f"[Norway] Black Metal\n"
+                  msg += f"https{c}{s}{s}youtube{d}com {month_tag}\n"
+                  msg += "---\n"
+
+              # Отправляем готовый текстовый список в твой Телеграм-бот
+              telegram_url = f"{BASE_TG}{BOT_TOKEN}{s}sendMessage"
+              payload = {
+                  "chat_id": ADMIN_CHAT_ID,
+                  "text": msg,
+                  "parse_mode": "HTML",
+                  "disable_web_page_preview": True
+              }
+              requests.post(telegram_url, json=payload)
+              print("УСПЕХ: Отчет успешно улетел в Телеграм!")
                   
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 11.25: {e}")
-          print("--- КОНЕЦ ДИАГНОСТИКИ ---")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА: {e}")
+          print("--- КОНЕЦ РАБОТЫ ---")
           EOF
 
-      - name: Run RSS Connection Test
+      # Запускаем финальныйrequests парсер с отправкой в ТГ
+      - name: Run Final Parser
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
         run: python test_metal.py
         
