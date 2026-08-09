@@ -23,7 +23,7 @@ jobs:
       - name: Kill old cache
         run: rm -f bandcamp.py skaner.py inferno.py runner.py test_metal.py
 
-      # ПОПЫТКА Б.4: Нарезаем монолитный XML по элементам перед сканированием
+      # Нарезаем монолитный XML по элементам перед сканированием
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
@@ -35,14 +35,14 @@ jobs:
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ПОПЫТКИ Б.4 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ПОПЫТКИ Б.5 ---")
           try:
               res = requests.get(URL_BLOG, headers=HEADERS, timeout=20)
               print(f"1. Код ответа метал-портала: {res.status_code}")
               print(f"2. Количество полученных символов: {len(res.text)}")
               
               if res.status_code == 200 and len(res.text) > 1000:
-                  # ИСПРАВЛЕНО: Режем сплошную строку на отдельные части по тегу </item>
+                  # Режем сплошную строку на отдельные части по тегу </item>
                   clean_text = res.text.replace("</item>", "</item>\n")
                   lines = clean_text.split("\n")
                   print(f"3. Текст успешно нарезан на {len(lines)} строк!")
@@ -50,7 +50,6 @@ jobs:
                   print("\n4. НАСТОЯЩИЕ ТЯЖЕЛЫЕ РЕЛИЗЫ, НАЙДЕННЫЕ В СТРОКАХ:")
                   count = 0
                   for line in lines:
-                      # Ищем заголовок внутри каждой конкретной отдельной строки
                       match = re.search(r'<title[^>]*>(.*?)</title>', line, re.IGNORECASE)
                       if match:
                           title_clean = match.group(1).replace("<![CDATA[", "").replace("]]>", "").strip()
@@ -67,10 +66,10 @@ jobs:
               else:
                   print("3. СБОЙ: Ответ пуст.")
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ Б.4: {e}")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ Б.5: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      name: Run RSS Connection Test
+      - name: Run RSS Connection Test
         run: python test_metal.py
         
