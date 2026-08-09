@@ -15,13 +15,12 @@ jobs:
         with:
           python-version: '3.10'
 
-      # Ставим только стандартный requests и bs4
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4
 
-      # ШАГ 11.16: Выводим блэк-метал новинки строго по твоему текстовому формату!
+      # ШАГ 11.17: Исправляем метод разделения строк для вывода живых групп
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
@@ -37,24 +36,20 @@ jobs:
 
           FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk"]
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.16 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.17 ---")
           try:
               now = datetime.now()
               month_tag = now.strftime("%b").upper()
               current_year = str(now.year)
 
-              # Точечный запрос к открытому кэшу
               query = 'site:bandcamp.com "black metal" "album"'
               encoded_query = urllib.parse.quote_plus(query)
               full_url = f"{BASE_URL}?q={encoded_query}&hl=en-US&gl=US&ceid=US:en"
               
               res = requests.get(full_url, headers=HEADERS, timeout=20)
               
-              if res.status_code == 200 and len(res.text) > 1000:
-                  # ИСПРАВЛЕНО: Используем стандартный html.parser, он не требует доп. библиотек
+              if res.status_code == 200 and len(res.text) > 100:
                   soup = BeautifulSoup(res.text, "html.parser")
-                  
-                  # Находим все теги <title> внутри скачанной ленты
                   titles = soup.find_all("title")
                   
                   print("\n🔥 СВЕЖИЙ БЛЭК-МЕТАЛ УЛОВ ПО ТВОЕМУ ШАБЛОНУ:\n")
@@ -64,12 +59,17 @@ jobs:
                   for t in titles:
                       text_clean = t.text.strip()
                       
-                      # Пропускаем служебный заголовок поиска Google
                       if "google news" in text_clean.lower() or len(text_clean) < 6:
                           continue
                           
-                      # Очищаем строку от поисковых хвостов Яндекса/Google
-                      clean_line = text_clean.split(" - ")[0].replace(" | Bandcamp", "").replace(" - Bandcamp", "").strip()
+                      # ИСПРАВЛЕНО: Безопасное отсечение хвоста поисковика через индекс массива
+                      parts = text_clean.split(" - ")
+                      if len(parts) > 1:
+                          clean_line = parts[0].strip()
+                      else:
+                          clean_line = text_clean
+
+                      clean_line = clean_line.replace(" | Bandcamp", "").replace(" - Bandcamp", "").strip()
                       
                       if any(forbidden in clean_line.lower() for forbidden in FORBIDDEN_KEYWORDS):
                           continue
@@ -77,7 +77,7 @@ jobs:
                       if clean_line.lower() in seen:
                           continue
 
-                      # Разбираем стандартную строку Bandcamp "Album Name, by Band Name" или "Artist - Album"
+                      # Разделяем строку "Album Name, by Band Name" или "Artist - Album"
                       if ", by " in clean_line:
                           title, artist = clean_line.split(", by ", 1)
                       elif " - " in clean_line:
@@ -85,7 +85,6 @@ jobs:
                       else:
                           title, artist = clean_line, "Underground Artist"
 
-                      # Выводим строго в твоем идеальном монолитном текстовом формате!
                       print(f"<code>{artist.strip()} - {title.strip()} ({current_year})</code>")
                       print("[Norway] Black Metal")
                       print(f"https://youtube.com {month_tag}")
@@ -105,7 +104,7 @@ jobs:
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем финальный текстовый рендеринг
+      # Запускаем исправленный текстовый рендеринг
       - name: Run RSS Connection Test
         run: python test_metal.py
         
