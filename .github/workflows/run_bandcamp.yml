@@ -15,20 +15,21 @@ jobs:
         with:
           python-version: '3.10'
 
+      # Ставим только базовый requests, никаких curl_cffi!
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install curl_cffi
+          pip install requests
 
-      # ШАГ 11.4: Забираем живую музыку через открытое фид-зеркало Bandcamp
+      # ШАГ 11.5: Чистый сбор через стандартный requests и зеркало
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
           import json
           from datetime import datetime
-          from curl_cffi import requests as cloud_requests
+          import requests
 
-          # Вечно открытый JSON-фид зеркала Bandcamp андеграунда
+          # Запрашиваем официальное автодополнение Bandcamp через CORS-прокси
           URL_FEED = "https://allorigins.win"
           HEADERS = {
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -36,20 +37,23 @@ jobs:
 
           FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk"]
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.4 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.5 ---")
           try:
               now = datetime.now()
               month_tag = now.strftime("%b").upper()
               current_year = str(now.year)
 
-              res = cloud_requests.get(URL_FEED, headers=HEADERS, impersonate="chrome110", timeout=20)
-              print(f"1. Код ответа зеркала: {res.status_code}")
+              # Используем стандартный requests.get
+              res = requests.get(URL_FEED, headers=HEADERS, timeout=20)
+              print(f"1. Код ответа прокси-зеркала: {res.status_code}")
               
               if res.status_code == 200:
                   raw_contents = res.json().get("contents", "")
-                  if raw_contents and "results" in raw_contents or "auto" in raw_contents:
+                  if raw_contents and ("results" in raw_contents or "auto" in raw_contents or "results" in raw_contents):
                       data = json.loads(raw_contents)
-                      items = data.get("auto", []) or data.get("results", [])
+                      
+                      # Проверяем все возможные варианты названия ключа выдачи Bandcamp
+                      items = data.get("auto", []) or data.get("results", []) or data.get("results", [])
                       print(f"2. УСПЕХ: Найдено сырых релизов в фиде: {len(items)}")
                       
                       print("\n3. СВЕЖИЙ БЛЭК-МЕТАЛ УЛОВ ПО ТВОЕМУ ШАБЛОНУ:\n")
@@ -66,7 +70,7 @@ jobs:
                           if any(forbidden in full_desc for forbidden in FORBIDDEN_KEYWORDS):
                               continue
 
-                          # Твой идеальный текстовый формат!
+                          # Выводим строго в твоем идеальном текстовом формате!
                           print(f"<code>{artist.strip()} - {title.strip()} ({current_year})</code>")
                           print("[Norway] Black Metal")
                           print(f"https://youtube.com {month_tag}")
@@ -76,17 +80,18 @@ jobs:
                           if count >= 3:
                               break
                       if count == 0:
-                          print("Все релизы отсеялись фильтром.")
+                          print("Все релизы из текущей выдачи отсеялись фильтром.")
                   else:
-                      print("2. СБОЙ: Зеркало вернуло пустой контент.")
+                      print("2. СБОЙ: Зеркало вернуло пустой контент (contents).")
+                      print(f"Срез ответа: {res.text[:200]}")
               else:
-                  print("2. СБОЙ: Зеркало недоступно.")
+                  print("2. СБОЙ: Зеркало недоступно или выдало ошибку.")
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 11.4: {e}")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 11.5: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем финальный тест
+      # Запускаем стабильный requests-парсер
       - name: Run RSS Connection Test
         run: python test_metal.py
         
