@@ -23,7 +23,7 @@ jobs:
       - name: Kill old cache
         run: rm -f bandcamp.py skaner.py inferno.py runner.py test_metal.py
 
-      # ПОПЫТКА Б.3: Сканируем любые вариации тегов title, игнорируя регистр букв
+      # ПОПЫТКА Б.4: Нарезаем монолитный XML по элементам перед сканированием
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
@@ -35,34 +35,42 @@ jobs:
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ПОПЫТКИ Б.3 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ПОПЫТКИ Б.4 ---")
           try:
               res = requests.get(URL_BLOG, headers=HEADERS, timeout=20)
               print(f"1. Код ответа метал-портала: {res.status_code}")
               print(f"2. Количество полученных символов: {len(res.text)}")
               
               if res.status_code == 200 and len(res.text) > 1000:
-                  # Ищем любые теги, содержащие слово title (например, <TITLE>, <atom:title> или <title>)
-                  raw_titles = re.findall(r'<[^>]*title[^>]*>(.*?)</[^>]*title>', res.text, re.IGNORECASE)
-                  print(f"3. Всего заголовков обнаружено в тексте: {len(raw_titles)}")
+                  # ИСПРАВЛЕНО: Режем сплошную строку на отдельные части по тегу </item>
+                  clean_text = res.text.replace("</item>", "</item>\n")
+                  lines = clean_text.split("\n")
+                  print(f"3. Текст успешно нарезан на {len(lines)} строк!")
                   
-                  print("\n4. СЫРЫЕ НАЗВАНИЯ ОБЗОРОВ ИЗ МЕТАЛ-ЛЕНТЫ:")
+                  print("\n4. НАСТОЯЩИЕ ТЯЖЕЛЫЕ РЕЛИЗЫ, НАЙДЕННЫЕ В СТРОКАХ:")
                   count = 0
-                  for t in raw_titles:
-                      title_clean = t.replace("<![CDATA[", "").replace("]]>", "").strip()
-                      if "no clean singing" in title_clean.lower() or len(title_clean) < 5:
-                          continue
-                      print(f"   -> Найдено: {title_clean}")
-                      count += 1
-                      if count >= 10:
-                          break
+                  for line in lines:
+                      # Ищем заголовок внутри каждой конкретной отдельной строки
+                      match = re.search(r'<title[^>]*>(.*?)</title>', line, re.IGNORECASE)
+                      if match:
+                          title_clean = match.group(1).replace("<![CDATA[", "").replace("]]>", "").strip()
+                          if "no clean singing" in title_clean.lower() or len(title_clean) < 5:
+                              continue
+                              
+                          print(f"   -> Найдена метал-статья: {title_clean}")
+                          count += 1
+                          if count >= 10:
+                              break
+                              
+                  if count == 0:
+                      print("В нарезанных строках заголовки не обнаружены.")
               else:
                   print("3. СБОЙ: Ответ пуст.")
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ Б.3: {e}")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ Б.4: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      - name: Run RSS Connection Test
+      name: Run RSS Connection Test
         run: python test_metal.py
         
