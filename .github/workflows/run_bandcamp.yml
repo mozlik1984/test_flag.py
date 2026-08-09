@@ -20,37 +20,54 @@ jobs:
           python -m pip install --upgrade pip
           pip install beautifulsoup4 curl_cffi
 
-      # ШАГ 11: Проверяем прямую связь с официальным новостным фидом Bandcamp
+      # ШАГ 11.1: Ищем ссылки на альбомы напрямую внутри скачанного HTML-кода
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
+          from bs4 import BeautifulSoup
           from curl_cffi import requests as cloud_requests
 
-          # Официальный открытый XML-шлюз новинок блэк-металла
           URL_RSS = "https://bandcamp.com"
           HEADERS = {
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.1 ---")
           try:
-              # Стучимся напрямую в RSS-ленту
               res = cloud_requests.get(URL_RSS, headers=HEADERS, impersonate="chrome110", timeout=20)
-              print(f"1. Код ответа RSS Bandcamp: {res.status_code}")
-              print(f"2. Количество полученных текстовых символов: {len(res.text)}")
               
-              if res.status_code == 200 and len(res.text) > 500:
-                  print("3. УСПЕХ: Лента новостей Bandcamp успешно скачана без блокировок!")
-                  # Покажем первые 150 символов, чтобы убедиться, что там XML/HTML, а не заглушка
-                  print(f"4. Начало фида: {res.text[:150].strip()}")
+              if res.status_code == 200 and len(res.text) > 1000:
+                  soup = BeautifulSoup(res.text, "html.parser")
+                  
+                  # Находим абсолютно все теги ссылок <a> на странице
+                  all_links = soup.find_all("a", href=True)
+                  
+                  # Фильтруем только те, которые ведут на альбомы (содержат в адресе "/album/")
+                  album_links = [l for l in all_links if "/album/" in l["href"].lower()]
+                  print(f"1. Всего ссылок на музыкальные альбомы обнаружено: {len(album_links)}")
+                  
+                  print("\n2. Текстовое содержимое первых 5 найденных ссылок:")
+                  count = 0
+                  for link in album_links:
+                      text_clean = link.text.strip()
+                      href_clean = link["href"].strip()
+                      # Пропускаем пустые клики
+                      if text_clean and len(text_clean) > 2:
+                          print(f"   -> Текст ссылки: {text_clean} | URL: {href_clean}")
+                          count += 1
+                          if count >= 5:
+                              break
+                              
+                  if count == 0:
+                      print("   -> Ссылки со словом '/album/' найдены, но их текстовые блоки пусты.")
               else:
-                  print("3. СБОЙ: Фид прислал пустой ответ.")
+                  print("СБОЙ: Не удалось получить контент страницы.")
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 11: {e}")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 11.1: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем проверку связи
+      # Запускаем поиск ссылок
       - name: Run RSS Connection Test
         run: python test_metal.py
         
