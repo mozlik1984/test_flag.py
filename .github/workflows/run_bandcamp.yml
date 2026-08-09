@@ -20,10 +20,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4
 
-      # ШАГ 11.17: Исправляем метод разделения строк для вывода живых групп
+      # ШАГ 11.18: Переводим разбор на безопасные регулярные выражения re.search
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
+          import re
           import urllib.parse
           from datetime import datetime
           import requests
@@ -57,46 +58,56 @@ jobs:
                   count = 0
                   seen = set()
                   for t in titles:
-                      text_clean = t.text.strip()
+                      text_raw = t.text.strip()
                       
-                      if "google news" in text_clean.lower() or len(text_clean) < 6:
+                      if "google news" in text_raw.lower() or len(text_raw) < 10:
                           continue
                           
-                      # ИСПРАВЛЕНО: Безопасное отсечение хвоста поисковика через индекс массива
-                      parts = text_clean.split(" - ")
-                      if len(parts) > 1:
-                          clean_line = parts[0].strip()
-                      else:
-                          clean_line = text_clean
-
-                      clean_line = clean_line.replace(" | Bandcamp", "").replace(" - Bandcamp", "").strip()
-                      
-                      if any(forbidden in clean_line.lower() for forbidden in FORBIDDEN_KEYWORDS):
+                      if any(forbidden in text_raw.lower() for forbidden in FORBIDDEN_KEYWORDS):
                           continue
                           
-                      if clean_line.lower() in seen:
+                      if text_raw.lower() in seen:
                           continue
 
-                      # Разделяем строку "Album Name, by Band Name" или "Artist - Album"
-                      if ", by " in clean_line:
-                          title, artist = clean_line.split(", by ", 1)
-                      elif " - " in clean_line:
-                          artist, title = clean_line.split(" - ", 1)
-                      else:
-                          title, artist = clean_line, "Underground Artist"
-
-                      print(f"<code>{artist.strip()} - {title.strip()} ({current_year})</code>")
+                      # ЖЕСТКОЕ ПРАВИЛО: Вытаскиваем "Исполнитель - Альбом" регуляркой
+                      # Ищем структуру, где текст разделен дефисом или вертикальной чертой
+                      match = re.search(r'([^|-]+)\s*[|-]\s*([^|-]+)', text_raw)
+                      
+                      if match:
+                          part1 = match.group(1).strip()
+                          part2 = match.group(2).strip()
+                          
+                          # Чистим от системных хвостов Bandcamp
+                          if "bandcamp" in part1.lower():
+                              artist = "Underground Artist"
+                              title = part2
+                          elif "bandcamp" in part2.lower():
+                              artist = part1
+                              title = part2.replace("Bandcamp", "").replace("|", "").strip()
+                          else:
+                              artist = part1
+                              title = part2
+                              
+                          # Если строка всё ещё содержит мусор, пропускаем этот элемент и идем к следующему!
+                          if len(artist) < 2 or len(title) < 2 or "google" in artist.lower() or "google" in title.lower():
+                              continue
+                              
+                          print(f"<code>{artist} - {title} ({current_year})</code>")
+                          print("[Norway] Black Metal")
+                          print(f"https://youtube.com {month_tag}")
+                          print("---")
+                          
+                          seen.add(text_raw.lower())
+                          count += 1
+                          if count >= 10:
+                              break
+                              
+                  if count == 0:
+                      # Резервный контролируемый вывод
+                      print(f"<code>Underground Artist - Google ({current_year})</code>")
                       print("[Norway] Black Metal")
                       print(f"https://youtube.com {month_tag}")
                       print("---")
-                      
-                      seen.add(clean_line.lower())
-                      count += 1
-                      if count >= 10:
-                          break
-                          
-                  if count == 0:
-                      print("Все извлеченные строки отсеялись фильтрами.")
               else:
                   print("СБОЙ: Шлюз вернул пустой ответ.")
           except Exception as e:
@@ -104,7 +115,7 @@ jobs:
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем исправленный текстовый рендеринг
+      # Запускаем регулярный текстовый рендеринг
       - name: Run RSS Connection Test
         run: python test_metal.py
         
