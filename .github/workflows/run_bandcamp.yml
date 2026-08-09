@@ -23,43 +23,76 @@ jobs:
       - name: Kill old cache
         run: rm -f bandcamp.py skaner.py inferno.py runner.py test_metal.py
 
-      # ШАГ 11.26: Печатаем чистый текст всех найденных ссылок без фильтрации
+      # ШАГ 11.27: Связываем артиста и альбом из соседних ссылок в твой формат
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
           import requests
+          from datetime import datetime
           from bs4 import BeautifulSoup
+
+          d = chr(46)
+          c = chr(58)
+          s = chr(47)
 
           URL_AOTY = "https://albumoftheyear.org"
           HEADERS = {
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.26 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.27 ---")
           try:
+              now = datetime.now()
+              month_tag = now.strftime("%b").upper()
+              current_year = str(now.year)
+
               res = requests.get(URL_AOTY, headers=HEADERS, timeout=20)
-              print(f"1. Код ответа сервера: {res.status_code}")
-              print(f"2. Количество символов в коде: {len(res.text)}")
               
               if res.status_code == 200 and len(res.text) > 1000:
                   soup = BeautifulSoup(res.text, "html.parser")
                   
-                  # Извлекаем абсолютно все ссылки на странице
-                  links = soup.find_all("a")
-                  print(f"3. Всего ссылок обнаружено в верстке: {len(links)}")
+                  # Находим все контейнеры карточек релизов на AOTY
+                  blocks = soup.find_all("div", class_="albumBlock") or soup.find_all("td", class_="albumBlockRow") or soup.find_all("div", class_="row")
+                  print(f"1. Контейнеров карточек обнаружено: {len(blocks)}")
                   
-                  print("\n4. СЫРОЙ ТЕКСТ ПЕРВЫХ 20 ССЫЛОК С САЙТА:")
+                  print("\n🔥 СВЕЖИЙ УЛОВ В ТВОЕМ ФОРМАТЕ (ТЕСТ СТРУКТУРЫ):\n")
                   count = 0
-                  for l in links:
-                      text_clean = l.text.strip().replace("\n", " ")
-                      # Пропускаем пустые или слишком короткие менюшки
-                      if not text_clean or len(text_clean) < 5 or "javascript" in text_clean.lower():
-                          continue
+                  seen = set()
+                  
+                  for block in blocks:
+                      # Вытаскиваем все ссылки внутри одной карточки релиза
+                      card_links = block.find_all("a", href=True)
+                      
+                      # Нам нужны только те карточки, где есть минимум две ссылки (Артист и Альбом)
+                      if len(card_links) >= 2:
+                          # Исключаем системные ссылки меню
+                          link_texts = [l.text.strip() for l in card_links if l.text.strip() and "reviews" not in l.text.lower()]
                           
-                      print(f"   -> [{count+1}] Ссылка содержит текст: {text_clean}")
-                      count += 1
-                      if count >= 20:
-                          break
+                          if len(link_texts) >= 2:
+                              artist = link_texts[0]
+                              title = link_texts[1]
+                              
+                              # Проверяем, чтобы это не были служебные кнопки сайта
+                              if "best" in artist.lower() or "new" in artist.lower() or "lists" in artist.lower():
+                                  continue
+                                  
+                              full_identity = f"{artist} - {title}".lower()
+                              if full_identity in seen or len(artist) > 30 or len(title) > 40:
+                                  continue
+                                  
+                              # Выводим СТРОГО по твоему идеальному текстовому шаблону!
+                              print(f"<code>{artist} - {title} ({current_year})</code>")
+                              print("[Norway] Black Metal") # Временно хардкодим жанр для теста верстки
+                              print(f"https{c}{s}{s}youtube{d}com {month_tag}")
+                              print("---")
+                              
+                              seen.add(full_identity)
+                              count += 1
+                              if count >= 5:
+                                  break
+                                  
+                  if count == 0:
+                      print("Не удалось связать ссылки внутри блоков.")
               else:
                   print("СБОЙ: Ответ пуст.")
           except Exception as e:
