@@ -18,92 +18,55 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests
+          pip install requests beautifulsoup4
 
       - name: Kill old cache
         run: rm -f bandcamp.py skaner.py inferno.py runner.py test_metal.py
 
-      # СБОРЩИК САМ ГЕНЕРИРУЕТ НЕУБИВАЕМЫЙ XML-ПАРСЕР ФИДА BANDCAMP
+      # ПОПЫТКА Б.1: Проверяем связь с открытым экстремальным метал-фидом
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
-          import re
-          from datetime import datetime
           import requests
+          from bs4 import BeautifulSoup
 
-          d = chr(46)
-          c = chr(58)
-          s = chr(47)
-
-          # Прямой прорыв к официальному фиду Bandcamp через стабильный CORS-мост
-          URL_PROXY = "https://codetabs.com"
+          # Открытый RSS фид крупнейшего портала экстремальной музыки
+          URL_BLOG = "https://nocleansinging.com"
           HEADERS = {
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
-          FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk"]
-
-          print("--- СТАРТ НАСТОЯЩЕГО БЛЭК-МЕТАЛ СБОРА ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ПОПЫТКИ Б.1 ---")
           try:
-              now = datetime.now()
-              month_tag = now.strftime("%b").upper()
-              current_year = str(now.year)
-
-              res = requests.get(URL_PROXY, headers=HEADERS, timeout=20)
-              print(f"1. Код ответа CORS-шлюза: {res.status_code}")
-              print(f"2. Количество полученных XML символов: {len(res.text)}")
+              res = requests.get(URL_BLOG, headers=HEADERS, timeout=20)
+              print(f"1. Код ответа метал-портала: {res.status_code}")
+              print(f"2. Количество полученных символов контента: {len(res.text)}")
               
-              if res.status_code == 200 and len(res.text) > 500:
-                  # Извлекаем все строки, которые лежат внутри XML-тегов <title>
-                  # Bandcamp пакует туда релизы в чистом формате: "Album Name by Band Name"
-                  raw_titles = re.findall(r'<title[^>]*>(.*?)</title>', res.text)
-                  print(f"3. Всего музыкальных заголовков обнаружено в фиде: {len(raw_titles)}")
+              if res.status_code == 200 and len(res.text) > 1000:
+                  print("3. УСПЕХ: Метал-фид успешно скачан без блокировок!")
+                  soup = BeautifulSoup(res.text, "html.parser")
                   
-                  print("\n4. ИСТИННЫЙ АНДЕГРАУНДНЫЙ БЛЭК-МЕТАЛ УЛОВ С BANDCAMP:\n")
+                  # В стандартных RSS темах заголовки постов лежат в тегах <title>
+                  titles = soup.find_all("title")
+                  print(f"4. Всего заголовков обзоров найдено в фиде: {len(titles)}")
+                  
+                  print("\n5. ВЕРХУШКА ЛЕНТЫ ОБЗОРОВ СЕРВЕРА:")
                   count = 0
-                  seen = set()
-                  
-                  for t in raw_titles:
-                      title_clean = t.strip()
-                      
-                      # Пропускаем служебный заголовок самого фида Bandcamp
-                      if "bandcamp" in title_clean.lower() or "new releases" in title_clean.lower() or len(title_clean) < 6:
+                  for t in titles:
+                      text_clean = t.text.strip()
+                      if "no clean singing" in text_clean.lower():
                           continue
-                          
-                      if any(forbidden in title_clean.lower() for forbidden in FORBIDDEN_KEYWORDS):
-                          continue
-                          
-                      if title_clean.lower() in seen:
-                          continue
-
-                      # Разбираем стандартный формат фида Bandcamp "Album Name by Band Name"
-                      if " by " in title_clean:
-                          title, artist = title_clean.rsplit(" by ", 1)
-                      else:
-                          title, artist = title_clean, "Underground Artist"
-
-                      # Выводим строго в твоем идеальном монолитном текстовом формате!
-                      print(f"<code>{artist.strip()} - {title.strip()} ({current_year})</code>")
-                      print("[Norway] Black Metal")
-                      print(f"https{c}{s}{s}youtube{d}com {month_tag}")
-                      print("---")
-                      
-                      seen.add(title_clean.lower())
+                      print(f"   -> Найдена статья: {text_clean}")
                       count += 1
-                      if count >= 7:
+                      if count >= 5:
                           break
-                          
-                  if count == 0:
-                      print("Все релизы из текущей ленты отсеялись фильтрами.")
               else:
-                  print("3. СБОЙ: Прокси-шлюз вернул пустой контент.")
-                  
+                  print("3. СБОЙ: Сервер вернул пустой ответ или ошибку.")
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА: {e}")
-          print("--- КОНЕЦ СБОРКИ ---")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ Б.1: {e}")
+          print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаемrequests парсер прокси-ленты
       - name: Run RSS Connection Test
         run: python test_metal.py
         
