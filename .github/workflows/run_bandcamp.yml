@@ -18,91 +18,51 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests beautifulsoup4
+          pip install requests
 
-      # ШАГ 11.11: Вытаскиваем текстовые строки релизов через регулярные выражения
+      # ШАГ 11.12: Изучаем теги сообщений Телеграма вокруг дефиса
       - name: Auto-generate python script
         run: |
           cat << 'EOF' > test_metal.py
-          import re
-          from datetime import datetime
           import requests
-          from bs4 import BeautifulSoup
-
-          d = chr(46)
-          c = chr(58)
-          s = chr(47)
 
           URL_TG_FEED = "https://t.me"
           HEADERS = {
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
 
-          FORBIDDEN_KEYWORDS = ["thrash", "death", "heavy", "power", "core", "electronic", "punk"]
-
-          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.11 ---")
+          print("--- СТАРТ ДИАГНОСТИКИ ШАГА 11.12 ---")
           try:
-              now = datetime.now()
-              month_tag = now.strftime("%b").upper()
-              current_year = str(now.year)
-
               res = requests.get(URL_TG_FEED, headers=HEADERS, timeout=20)
+              print(f"1. Код ответа серверов Telegram: {res.status_code}")
+              print(f"2. Количество символов в коде: {len(res.text)}")
               
               if res.status_code == 200 and len(res.text) > 1000:
-                  # Ищем любые текстовые куски внутри сообщений, содержащие разделитель " - "
-                  # Извлекаем текст между HTML-тегами div
-                  raw_lines = re.findall(r'dir="auto">(.*?)</div>', res.text) or re.findall(r'class="[^"]*text[^"]*">(.*?)</div>', res.text)
-                  print(f"1. Всего сырых текстовых строк извлечено из HTML: {len(raw_lines)}")
+                  html = res.text
                   
-                  print("\n2. СВЕЖИЙ БЛЭК-МЕТАЛ УЛОВ ПО ТВОЕМУ ШАБЛОНУ:\n")
-                  count = 0
-                  seen = set()
-                  
-                  for line in raw_lines:
-                      # Очищаем строку от внутренних HTML-тегов, если они проскочили
-                      soup_clean = BeautifulSoup(line, "html.parser")
-                      text_clean = soup_clean.get_text().strip()
+                  # Ищем первый попавшийся дефис с пробелами, который разделяет исполнителя и альбом
+                  marker = " - "
+                  if marker in html:
+                      print("3. УСПЕХ: Музыкальный маркер ' - ' успешно обнаружен в коде страницы!")
+                      idx = html.find(marker)
                       
-                      if not text_clean or " - " not in text_clean:
-                          continue
-                          
-                      if any(forbidden in text_clean.lower() for forbidden in FORBIDDEN_KEYWORDS):
-                          continue
-                          
-                      # Берем первую строчку релиза
-                      first_line = text_clean.split("\n")[0].strip()
-                      if " - " in first_line:
-                          artist, title = first_line.split(" - ", 1)
-                          title = title.split("(")[0].strip()
-                          artist = artist.strip()
-                      else:
-                          continue
-                          
-                      full_identity = f"{artist} - {title}".lower()
-                      if full_identity in seen or len(artist) > 30 or len(title) > 40:
-                          continue
-
-                      # Выводим строго в твоем идеальном монолитном текстовом формате!
-                      print(f"<code>{artist} - {title} ({current_year})</code>")
-                      print("[Norway] Black Metal")
-                      print(f"https{c}{s}{s}youtube{d}com {month_tag}")
-                      print("---")
+                      # Вырезаем кусок кода вокруг дефиса
+                      raw_chunk = html[idx-150:idx+200]
+                      # Заменяем скобки, чтобы GitHub логов не скрыл их
+                      clean_chunk = raw_chunk.replace("<", "&lt;").replace(">", "&gt;")
                       
-                      seen.add(full_identity)
-                      count += 1
-                      if count >= 5:
-                          break
-                  if count == 0:
-                      print("Все извлеченные строки отсеялись фильтрами поджанров.")
+                      print("\n4. СЫРОЙ КУСОК КОДА ДЛЯ АНАЛИЗА ТЕГОВ ТЕЛЕГРАМА:")
+                      print(clean_chunk)
+                  else:
+                      print("3. СБОЙ: Маркер ' - ' не найден в коде страницы. Лента пуста.")
               else:
-                  print("СБОЙ: Лента пуста.")
-                  
+                  print("СБОЙ: Не удалось загрузить страницу.")
           except Exception as e:
-              print(f"КРИТИЧЕСКАЯ ОШИБКА НА ШАГЕ 11.11: {e}")
+              print(f"КРИТИЧЕСКАЯ ОШИБКА: {e}")
           print("--- КОНЕЦ ДИАГНОСТИКИ ---")
           EOF
 
-      # Запускаем текстовый регулярный сканер
+      # Запускаем чтение кода вокруг дефиса
       - name: Run RSS Connection Test
         run: python test_metal.py
         
