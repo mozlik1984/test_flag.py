@@ -15,6 +15,7 @@ C = chr(58)  # :
 Q = chr(63)  # ?
 E = chr(61)  # =
 D = chr(46)  # .
+D_API = "api" + D + "discogs" + D + "com" + S + "database" + S + "search"
 A = chr(38)  # &
 P = "https" + C + S + S
 
