@@ -77,19 +77,18 @@ COUNTRY_MAP = {
 
 artist_countries_cache = {}
 def verify_via_discogs(band_name, album_name):
-    """ Стальной Фильтр v5.0: Жесткая проверка связки Группа + Альбом через Discogs API """
+    """ Стальной Фильтр v6.0: Проверка на Discogs + Тотальный бан ИИ-цифрового мусора """
     if not band_name or not album_name:
         return False
     
-    # Очищаем названия от лишних пробелов и кодируем для URL
     search_query = f"{band_name} {album_name}"
     encoded_query = urllib.parse.quote(search_query)
     
-    # Сборка зашифрованного URL: https://discogs.com
+    # Запрос к Discogs API
     url = f"{P}{D_API}{Q}q{E}{encoded_query}{A}type{E}release"
-    headers = {'User-Agent': 'MetalHubValidatorApp/2.0'}
+    headers = {'User-Agent': 'MetalHubValidatorApp/3.0'}
     
-    time.sleep(1) # Соблюдаем лимиты запросов Discogs API (60 в минуту)
+    time.sleep(1.5) # Немного увеличим паузу для стабильности
     try:
         req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=8) as response:
@@ -97,15 +96,26 @@ def verify_via_discogs(band_name, album_name):
                 data = json.loads(response.read().decode('utf-8'))
                 results = data.get("results", [])
                 
-                # Если в базе Discogs есть хоть одно точное совпадение, релиз реален
                 if len(results) > 0:
-                    print(f"✅ Фильтр пройден: {band_name} - {album_name} подтвержден на Discogs.")
+                    # Проверяем формат САМОГО ПЕРВОГО (главного) результата
+                    first_release = results[0]
+                    formats = [f.lower() for f in first_release.get("format", [])]
+                    
+                    # Жесткое условие: Если это ТОЛЬКО цифра/файл — это 100% ИИ-мусор или сингл
+                    is_digital = any("file" in fmt or "digital" in fmt or "aac" in fmt or "mp3" in fmt for fmt in formats)
+                    has_physical = any("vinyl" in fmt or "cd" in fmt or "cassette" in fmt or "lp" in fmt for fmt in formats)
+                    
+                    if is_digital and not has_physical:
+                        print(f"❌ БАН: {band_name} - {album_name} признан ИИ-пустышкой (формат: {formats}).")
+                        return False
+                        
+                    print(f"✅ Подтвержден физический релиз: {band_name} - {album_name}")
                     return True
     except Exception as e:
-        print(f"⚠️ Ошибка проверки Discogs для {band_name}: {e}")
-        return True # Резервный фолбэк, чтобы не потерять релиз при сбое сети
+        print(f"⚠️ Сбой сети Discogs для {band_name}: {e}")
+        return True # В случае падения самого API не теряем релиз
         
-    print(f"❌ РЕЛИЗ ОТКЛОНЕН: {band_name} - {album_name} отсутствует на Discogs (ИИ-мусор/Сингл).")
+    print(f"❌ ОТКЛОНЕН: {band_name} - {album_name} не найден в главной базе.")
     return False
 
 def get_country_by_artist_id(artist_id, headers):
