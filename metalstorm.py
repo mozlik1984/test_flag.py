@@ -4,13 +4,12 @@ import urllib.parse
 import json
 import time
 import sys
-import re
 
 # Настройки бота и администратора
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_CHAT_ID = 5002053185
 
-# ASCII-шифрование эндпоинтов Metal Storm и Telegram
+# Тотальное ASCII-шифрование всех ссылок и путей
 S = chr(47)  # /
 C = chr(58)  # :
 Q = chr(63)  # ?
@@ -18,14 +17,24 @@ A = chr(38)  # &
 E = chr(61)  # =
 P = "https" + C + S + S
 
-# Базовые скрытые домены и пути
-MS_BASE = "metalstorm.net" + S
-MS_REL_PATH = "events" + S + "releases.php"
-MS_BAND_PATH = "bands" + S + "band.php"
+# Скрытые домены и эндпоинты
+MB_BASE = "musicbrainz.org" + S + "ws" + S + "2" + S
+MA_BASE = "://metal-archives.com" + S + "search" + S + "ajax-band-search" + S
 TG_BASE = "api.telegram.org" + S + "bot"
 YT_BASE = "youtube.com"
+MS_BASE = "metalstorm.net" + S
 
-# Расширенный список эмодзи флагов для Metal Storm (80 стран)
+# Полный маскировочный набор заголовков под реальный браузер (Анти-403)
+REAL_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+    'Cache-Control': 'max-age=0',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1'
+}
+
+# Расширенный список эмодзи флагов (80 стран)
 COUNTRY_TO_FLAG = {
     "Norway": "🇳🇴", "Sweden": "🇸🇪", "Finland": "🇫🇮", "Germany": "🇩🇪",
     "France": "🇫🇷", "United States": "🇺🇸", "United Kingdom": "🇬🇧",
@@ -33,7 +42,7 @@ COUNTRY_TO_FLAG = {
     "Poland": "🇵🇱", "Greece": "🇬🇷", "Italy": "🇮🇹", "Switzerland": "🇨🇭",
     "Netherlands": "🇳🇱", "Belgium": "🇧🇪", "Portugal": "🇵🇹", "Spain": "🇪🇸",
     "Canada": "🇨🇦", "Australia": "🇦🇺", "Brazil": "🇧🇷", "Japan": "🇯🇵",
-    "Wales": "🏴󠁧󠁢🇺󠁬󠁳󠁿", "China": "🇨🇳", "Czech Republic": "🇨🇿", "Denmark": "🇩🇰",
+    "Wales": "🏴󠁧󠁢󠁷󠁬󠁳󠁿", "China": "🇨🇳", "Czech Republic": "🇨🇿", "Denmark": "🇩🇰",
     "Indonesia": "🇮🇩", "Hungary": "🇭🇺", "Ireland": "🇮🇪", "Colombia": "🇨🇴",
     "Chile": "🇨🇱", "Argentina": "🇦🇷", "Mexico": "🇲🇽", "New Zealand": "🇳🇿",
     "Slovakia": "🇸🇰", "Slovenia": "🇸🇮", "Estonia": "🇪🇪", "Belarus": "🇧🇾",
@@ -48,12 +57,80 @@ COUNTRY_TO_FLAG = {
     "Peru": "🇵🇪", "Ecuador": "🇪🇨", "Venezuela": "🇻🇪", "Bolivia": "🇧🇴",
     "Uruguay": "🇺🇾", "Paraguay": "🇵🇾", "Costa Rica": "🇨🇷", "Panama": "🇵🇦",
     "Guatemala": "🇬🇹", "Cuba": "🇨🇺", "Puerto Rico": "🇵🇷", "Greenland": "🇬🇱",
-    "Luxembourg": "🇱🇺", "Malta": "🇲🇹", "San Marino": "🇸微", "Andorra": "🇦🇩"
+    "Luxembourg": "🇱🇺", "Malta": "🇲🇹", "San Marino": "🇸🇲", "Andorra": "🇦🇩"
 }
 
-band_countries_cache = {}
+COUNTRY_MAP = {
+    "NO": "Norway", "SE": "Sweden", "FI": "Finland", "DE": "Germany",
+    "FR": "France", "US": "United States", "GB": "United Kingdom",
+    "UA": "Ukraine", "RU": "Russia", "AT": "Austria", "IS": "Iceland",
+    "PL": "Poland", "GR": "Greece", "IT": "Italy", "CH": "Switzerland",
+    "NL": "Netherlands", "AU": "Australia", "CA": "Canada", "BR": "Brazil",
+    "JP": "Japan", "CZ": "Czech Republic", "DK": "Denmark", "ID": "Indonesia",
+    "HU": "Hungary", "IE": "Ireland", "CO": "Colombia", "CL": "Chile",
+    "AR": "Argentina", "MX": "Mexico", "NZ": "New Zealand", "SK": "Slovakia",
+    "SI": "Slovenia", "EE": "Estonia", "BY": "Belarus", "KZ": "Kazakhstan",
+    "AM": "Armenia", "GE": "Georgia", "LT": "Lithuania", "LV": "Latvia",
+    "RO": "Romania", "BG": "Bulgaria", "RS": "Serbia", "HR": "Croatia",
+    "BA": "Bosnia and Herzegovina", "ME": "Montenegro", "MK": "North Macedonia",
+    "AL": "Albania", "TR": "Turkey", "CY": "Cyprus", "CN": "China",
+    "TW": "Taiwan", "KR": "South Korea", "IN": "India", "TH": "Thailand",
+    "VN": "Vietnam", "MY": "Malaysia", "SG": "Singapore", "IL": "Israel",
+    "SA": "Saudi Arabia", "AE": "United Arab Emirates", "IR": "Iran",
+    "ZA": "South Africa", "EG": "Egypt", "MA": "Morocco", "TN": "Tunisia",
+    "PE": "Peru", "EC": "Ecuador", "VE": "Venezuela", "BO": "Bolivia",
+    "UY": "Uruguay", "PY": "Paraguay", "CR": "Costa Rica", "PA": "Panama",
+    "GT": "Guatemala", "CU": "Cuba", "PR": "Puerto Rico", "GL": "Greenland",
+    "LU": "Luxembourg", "MT": "Malta", "SM": "San Marino", "AD": "Andorra"
+}
+
+artist_countries_cache = {}
+def verify_via_metal_archives(band_name):
+    """ Проверка группы на вшивость через защищенный API-эндпоинт Metal Archives """
+    if not band_name:
+        return False
+    encoded_band = urllib.parse.quote(band_name)
+    url = f"{P}{MA_BASE}{Q}field{E}name{A}query{E}{encoded_band}"
+    try:
+        req = urllib.request.Request(url, headers=REAL_HEADERS)
+        with urllib.request.urlopen(req, timeout=7) as response:
+            if response.status == 200:
+                data = json.loads(response.read().decode('utf-8'))
+                if data.get("iTotalRecords", 0) > 0:
+                    return True
+    except Exception:
+        return True
+    return False
+
+def get_country_by_artist_id(artist_id, headers):
+    """ Запрос страны исполнителя с использованием кэширования """
+    if not artist_id:
+        return ""
+    if artist_id in artist_countries_cache:
+        return artist_countries_cache[artist_id]
+        
+    url = f"{P}{MB_BASE}artist{S}{artist_id}{Q}fmt{E}json"
+    time.sleep(1)
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as response:
+            if response.status == 200:
+                data = json.loads(response.read().decode('utf-8'))
+                country_code = data.get("country", "")
+                if not country_code:
+                    area = data.get("area", {})
+                    codes = area.get("iso-3166-1-codes", [""])
+                    country_code = codes if codes else ""
+                
+                artist_countries_cache[artist_id] = str(country_code).upper()
+                return artist_countries_cache[artist_id]
+    except Exception:
+        pass
+    artist_countries_cache[artist_id] = ""
+    return ""
+
 def fetch_metalstorm_releases():
-    """ Основная функция сбора и фильтрации релизов с Metal Storm """
+    """ Главная функция парсинга новых поступлений с маскировкой под мобильный браузер """
     months_map = {1: "JAN", 2: "FEB", 3: "MAR", 4: "APR", 5: "MAY", 6: "JUN", 7: "JUL", 8: "AUG", 9: "SEP", 10: "OCT", 11: "NOV", 12: "DEC"}
     months_num_map = {"JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6, "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12}
     
@@ -61,7 +138,6 @@ def fetch_metalstorm_releases():
     current_year = time_struct.tm_year
     current_month_num = time_struct.tm_mon
     
-    # Работа по требованию через аргументы запуска GitHub Actions
     if len(sys.argv) > 2:
         input_month = str(sys.argv[1]).strip().upper()
         input_year = str(sys.argv[2]).strip().upper()
@@ -74,16 +150,12 @@ def fetch_metalstorm_releases():
     current_month_tag = months_map.get(current_month_num, "JUL")
     print(f"🎵 Metal Storm парсер запущен за период: {current_month_tag} {current_year}")
     
-    # Сборка зашифрованного URL архива релизов: https://metalstorm.net
     url = f"{P}{MS_BASE}events{S}releases.php"
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-    }
     
     html_content = ""
     try:
-        req = urllib.request.Request(url, headers=headers)
+        # Передаем обновленный словарь REAL_HEADERS вместо старых настроек
+        req = urllib.request.Request(url, headers=REAL_HEADERS)
         with urllib.request.urlopen(req, timeout=15) as response:
             if response.status == 200:
                 html_content = response.read().decode('utf-8', errors='ignore')
@@ -98,7 +170,6 @@ def fetch_metalstorm_releases():
     packs = []
     seen_releases = set()
     
-    # Поиск таблицы релизов в HTML коде через строковые маркеры
     table_start = html_content.find('<table')
     if table_start == -1:
         print("❌ Таблица релизов не найдена в HTML коде.")
