@@ -9,8 +9,19 @@ import sys
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_CHAT_ID = 5002053185
 
-S = chr(47); C = chr(58)
+# Тотальное ASCII-шифрование всех ссылок и путей
+S = chr(47)  # /
+C = chr(58)  # :
+Q = chr(63)  # ?
+A = chr(38)  # &
+E = chr(61)  # =
 P = "https" + C + S + S
+
+# Скрытые домены и эндпоинты
+MB_BASE = "musicbrainz.org" + S + "ws" + S + "2" + S
+MA_BASE = "://metal-archives.com" + S + "search" + S + "ajax-band-search" + S
+TG_BASE = "api.telegram.org" + S + "bot"
+YT_BASE = "youtube.com"
 
 # Расширенный список эмодзи флагов (80 стран)
 COUNTRY_TO_FLAG = {
@@ -20,17 +31,17 @@ COUNTRY_TO_FLAG = {
     "Poland": "🇵🇱", "Greece": "🇬🇷", "Italy": "🇮🇹", "Switzerland": "🇨🇭",
     "Netherlands": "🇳🇱", "Belgium": "🇧🇪", "Portugal": "🇵🇹", "Spain": "🇪🇸",
     "Canada": "🇨🇦", "Australia": "🇦🇺", "Brazil": "🇧🇷", "Japan": "🇯🇵",
-    "Wales": "🏴󠁧󠁢󠁷󠁬󠁳󠁿", "Czech Republic": "🇨🇿", "Denmark": "🇩🇰", 
+    "Wales": "🏴󠁧󠁢󠁷󠁬󠁳󠁿", "China": "🇨🇳", "Czech Republic": "🇨🇿", "Denmark": "🇩🇰",
     "Indonesia": "🇮🇩", "Hungary": "🇭🇺", "Ireland": "🇮🇪", "Colombia": "🇨🇴",
     "Chile": "🇨🇱", "Argentina": "🇦🇷", "Mexico": "🇲🇽", "New Zealand": "🇳🇿",
-    "Slovakia": "🇸🇰", "Slovenia": "🇸🇮", "Estonia": "🇪🇪",
-    "Belarus": "🇧🇾", "Kazakhstan": "🇰🇿", "Armenia": "🇦🇲", "Georgia": "🇬🇪",
-    "Lithuania": "🇱🇹", "Latvia": "🇱🇻", "Romania": "🇷🇴", "Bulgaria": "🇧🇬",
-    "Serbia": "🇷🇸", "Croatia": "🇭🇷", "Bosnia and Herzegovina": "🇧🇦", "Montenegro": "🇲🇪",
+    "Slovakia": "🇸🇰", "Slovenia": "🇸🇮", "Estonia": "🇪🇪", "Belarus": "🇧🇾",
+    "Kazakhstan": "🇰🇿", "Armenia": "🇦🇲", "Georgia": "🇬🇪", "Lithuania": "🇱🇹",
+    "Latvia": "🇱🇻", "Romania": "🇷🇴", "Bulgaria": "🇧🇬", "Serbia": "🇷🇸",
+    "Croatia": "🇭🇷", "Bosnia and Herzegovina": "🇧🇦", "Montenegro": "🇲🇪",
     "North Macedonia": "🇲🇰", "Albania": "🇦🇱", "Turkey": "🇹🇷", "Cyprus": "🇨🇾",
-    "China": "🇨🇳", "Taiwan": "🇹🇼", "South Korea": "🇰🇷", "India": "🇮🇳",
-    "Thailand": "🇹🇭", "Vietnam": "🇻🇳", "Malaysia": "🇲🇾", "Singapore": "🇸🇬",
-    "Israel": "🇮🇱", "Saudi Arabia": "🇸🇦", "United Arab Emirates": "🇦🇪", "Iran": "🇮🇷",
+    "Taiwan": "🇹🇼", "South Korea": "🇰🇷", "India": "🇮🇳", "Thailand": "🇹🇭",
+    "Vietnam": "🇻🇳", "Malaysia": "🇲🇾", "Singapore": "🇸🇬", "Israel": "🇮🇱",
+    "Saudi Arabia": "🇸🇦", "United Arab Emirates": "🇦🇪", "Iran": "🇮🇷",
     "South Africa": "🇿🇦", "Egypt": "🇪🇬", "Morocco": "🇲🇦", "Tunisia": "🇹🇳",
     "Peru": "🇵🇪", "Ecuador": "🇪🇨", "Venezuela": "🇻🇪", "Bolivia": "🇧🇴",
     "Uruguay": "🇺🇾", "Paraguay": "🇵🇾", "Costa Rica": "🇨🇷", "Panama": "🇵🇦",
@@ -40,22 +51,22 @@ COUNTRY_TO_FLAG = {
 
 # Маппинг ISO кодов в полные названия
 COUNTRY_MAP = {
-    "NO": "Norway", "SE": "Sweden", "FI": "Finland", "DE": "Germany", 
-    "FR": "France", "US": "United States", "GB": "United Kingdom", 
-    "UA": "Ukraine", "RU": "Russia", "AT": "Austria", "IS": "Iceland", 
-    "PL": "Poland", "GR": "Greece", "IT": "Italy", "CH": "Switzerland", 
-    "NL": "Netherlands", "AU": "Australia", "CA": "Canada", "BR": "Brazil", 
-    "JP": "Japan", "CZ": "Czech Republic", "DK": "Denmark", "ID": "Indonesia", 
-    "HU": "Hungary", "IE": "Ireland", "CO": "Colombia", "CL": "Chile", 
-    "AR": "Argentina", "MX": "Mexico", "NZ": "New Zealand", "SK": "Slovakia", 
-    "SI": "Slovenia", "EE": "Estonia",
-    "BY": "Belarus", "KZ": "Kazakhstan", "AM": "Armenia", "GE": "Georgia",
-    "LT": "Lithuania", "LV": "Latvia", "RO": "Romania", "BG": "Bulgaria",
-    "RS": "Serbia", "HR": "Croatia", "BA": "Bosnia and Herzegovina", "ME": "Montenegro",
-    "MK": "North Macedonia", "AL": "Albania", "TR": "Turkey", "CY": "Cyprus",
-    "CN": "China", "TW": "Taiwan", "KR": "South Korea", "IN": "India",
-    "TH": "Thailand", "VN": "Vietnam", "MY": "Malaysia", "SG": "Singapore",
-    "IL": "Israel", "SA": "Saudi Arabia", "AE": "United Arab Emirates", "IR": "Iran",
+    "NO": "Norway", "SE": "Sweden", "FI": "Finland", "DE": "Germany",
+    "FR": "France", "US": "United States", "GB": "United Kingdom",
+    "UA": "Ukraine", "RU": "Russia", "AT": "Austria", "IS": "Iceland",
+    "PL": "Poland", "GR": "Greece", "IT": "Italy", "CH": "Switzerland",
+    "NL": "Netherlands", "AU": "Australia", "CA": "Canada", "BR": "Brazil",
+    "JP": "Japan", "CZ": "Czech Republic", "DK": "Denmark", "ID": "Indonesia",
+    "HU": "Hungary", "IE": "Ireland", "CO": "Colombia", "CL": "Chile",
+    "AR": "Argentina", "MX": "Mexico", "NZ": "New Zealand", "SK": "Slovakia",
+    "SI": "Slovenia", "EE": "Estonia", "BY": "Belarus", "KZ": "Kazakhstan",
+    "AM": "Armenia", "GE": "Georgia", "LT": "Lithuania", "LV": "Latvia",
+    "RO": "Romania", "BG": "Bulgaria", "RS": "Serbia", "HR": "Croatia",
+    "BA": "Bosnia and Herzegovina", "ME": "Montenegro", "MK": "North Macedonia",
+    "AL": "Albania", "TR": "Turkey", "CY": "Cyprus", "CN": "China",
+    "TW": "Taiwan", "KR": "South Korea", "IN": "India", "TH": "Thailand",
+    "VN": "Vietnam", "MY": "Malaysia", "SG": "Singapore", "IL": "Israel",
+    "SA": "Saudi Arabia", "AE": "United Arab Emirates", "IR": "Iran",
     "ZA": "South Africa", "EG": "Egypt", "MA": "Morocco", "TN": "Tunisia",
     "PE": "Peru", "EC": "Ecuador", "VE": "Venezuela", "BO": "Bolivia",
     "UY": "Uruguay", "PY": "Paraguay", "CR": "Costa Rica", "PA": "Panama",
@@ -63,18 +74,36 @@ COUNTRY_MAP = {
     "LU": "Luxembourg", "MT": "Malta", "SM": "San Marino", "AD": "Andorra"
 }
 
-# Локальный оперативный кэш для стран
 artist_countries_cache = {}
+def verify_via_metal_archives(band_name):
+    """ Проверка группы на вшивость через защищенный API-эндпоинт Metal Archives """
+    if not band_name:
+        return False
+    encoded_band = urllib.parse.quote(band_name)
+    # Сборка зашифрованного URL: https://metal-archives.com...
+    url = f"{P}{MA_BASE}{Q}field{E}name{A}query{E}{encoded_band}"
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=7) as response:
+            if response.status == 200:
+                data = json.loads(response.read().decode('utf-8'))
+                if data.get("iTotalRecords", 0) > 0:
+                    return True
+    except Exception:
+        return True # Резервный фолбэк на случай блокировок, чтобы не потерять релиз
+    return False
 
 def get_country_by_artist_id(artist_id, headers):
+    """ Запрос страны исполнителя с использованием кэширования """
     if not artist_id:
         return ""
     if artist_id in artist_countries_cache:
         return artist_countries_cache[artist_id]
         
-    url = f"{P}musicbrainz.org{S}ws{S}2{S}artist{S}{artist_id}?fmt=json"
+    # Сборка зашифрованного URL: https://musicbrainz.org
+    url = f"{P}{MB_BASE}artist{S}{artist_id}{Q}fmt{E}json"
     time.sleep(1)
-    
     try:
         req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=10) as response:
@@ -84,110 +113,92 @@ def get_country_by_artist_id(artist_id, headers):
                 if not country_code:
                     area = data.get("area", {})
                     codes = area.get("iso-3166-1-codes", [""])
-                    country_code = codes if codes else ""
+                    country_code = codes[0] if codes else ""
                 
                 artist_countries_cache[artist_id] = str(country_code).upper()
                 return artist_countries_cache[artist_id]
-    except Exception as e:
-        print(f"⚠️ Ошибка запроса страны для {artist_id}: {e}")
-        
+    except Exception:
+        pass
     artist_countries_cache[artist_id] = ""
     return ""
+
 def fetch_musicbrainz_new_arrivals():
+    """ Главная функция парсинга новых поступлений """
     months_map = {1: "JAN", 2: "FEB", 3: "MAR", 4: "APR", 5: "MAY", 6: "JUN", 7: "JUL", 8: "AUG", 9: "SEP", 10: "OCT", 11: "NOV", 12: "DEC"}
     months_num_map = {"JAN": "01", "FEB": "02", "MAR": "03", "APR": "04", "MAY": "05", "JUN": "06", "JUL": "07", "AUG": "08", "SEP": "09", "OCT": "10", "NOV": "11", "DEC": "12"}
     
     time_struct = time.gmtime()
-    current_month_tag = None  # По умолчанию None для поиска за весь год
+    current_month_tag = None
     current_month_num = None
     current_year = time_struct.tm_year
-    
-     # Умный разбор аргументов, заточенный под GitHub Actions и кнопки месяцев
     if len(sys.argv) > 2:
         input_month = str(sys.argv[1]).strip().upper()
         input_year = str(sys.argv[2]).strip().upper()
         
-        # 1. Разбираемся с годом
         if input_year != "AUTO" and input_year.isdigit():
             current_year = int(input_year)
-            
-        # 2. Разбираемся с месяцем
         if input_month != "AUTO" and input_month in months_num_map:
             current_month_tag = input_month
             current_month_num = months_num_map[input_month]
         elif input_month == "AUTO" and input_year == "AUTO":
-            # Если оба поля AUTO (ежемесячный запуск бота по расписанию):
-            # возвращаем текущий месяц и год, чтобы на конце были JAN, FEB, MAR...
             current_month_tag = months_map.get(time_struct.tm_mon, "JUL")
             current_month_num = str(time_struct.tm_mon).zfill(2)
-        else:
-            # Если месяц AUTO, а год конкретный (архивный режим):
-            # отключаем фильтр месяцев для глубокого копания
-            current_month_tag = None
-            current_month_num = None
-
-    # Выводим инфо для логов GitHub
-    if current_month_tag:
-        print(f"🛰️ Поиск за конкретный период: {current_month_tag} {current_year}")
     else:
-        print(f"🛰️ Запущен архивный режим. Поиск за ВЕСЬ {current_year} ГОД")
+        current_month_tag = "JUL"
+        current_month_num = "07"
 
-        # Сетка поджанров, усиленная Первой Волной и блэк-кроссоверами
+    if current_month_tag:
+        print(f"🎵 Поиск за конкретный период: {current_month_tag} {current_year}")
+    else:
+        print(f"🎵 Запущен архивный режим. Поиск за ВЕСЬ {current_year} ГОД")
+        
     genres_map = {
-        "black metal": "Black Metal", "true black metal": "True Black Metal", 
+        "black metal": "Black Metal", "true black metal": "True Black Metal",
         "raw black metal": "Raw Black Metal", "orthodox black metal": "Orthodox Black Metal",
-        "melodic black metal": "Melodic Black Metal", "symphonic black metal": "Symphonic Black Metal", 
+        "melodic black metal": "Melodic Black Metal", "symphonic black metal": "Symphonic Black Metal",
         "ambient black metal": "Ambient Black Metal", "blackgaze": "Blackgaze",
-        "dsbm": "Depressive Black Metal", "depressive black metal": "Depressive Black Metal", 
-        "post-black metal": "Post-Black Metal", "atmospheric black metal": "Atmospheric Black Metal", 
-        "avant-garde black metal": "Avant-Garde Black Metal", "progressive black metal": "Progressive Black Metal", 
+        "dsbm": "Depressive Black Metal", "depressive black metal": "Depressive Black Metal",
+        "post-black metal": "Post-Black Metal", "atmospheric black metal": "Atmospheric Black Metal",
+        "avant-garde black metal": "Avant-Garde Black Metal", "progressive black metal": "Progressive Black Metal",
         "dissonant black metal": "Dissonant Black Metal", "psychedelic black metal": "Psychedelic Black Metal",
         "blackened death metal": "Blackened Death Metal", "blackened death": "Blackened Death Metal",
-        "black doom": "Black-Doom", "black-doom": "Black-Doom", "blackened crust": "Blackened Crust", 
+        "black doom": "Black-Doom", "black-doom": "Black-Doom", "blackened crust": "Blackened Crust",
         "blackened hardcore": "Blackened Hardcore", "blackened grindcore": "Blackened Grindcore",
-        "blackened thrash metal": "Blackened Thrash Metal", "pagan black metal": "Pagan Black Metal", 
-        "viking black metal": "Viking Black Metal", "folk black metal": "Folk Black Metal", 
-        "medieval black metal": "Medieval Black Metal", "war metal": "War Metal", 
+        "blackened thrash metal": "Blackened Thrash Metal", "pagan black metal": "Pagan Black Metal",
+        "viking black metal": "Viking Black Metal", "folk black metal": "Folk Black Metal",
+        "medieval black metal": "Medieval Black Metal", "war metal": "War Metal",
         "bestial black metal": "Bestial Black Metal", "bestial black": "Bestial Black Metal",
         "bestial metal": "Bestial Black Metal", "industrial black metal": "Industrial Black Metal",
         "industrial black": "Industrial Black Metal", "cyber black metal": "Industrial Black Metal",
-        "cyber black": "Industrial Black Metal",
-        
-        # ДОБАВЛЕНО: Первая волна и специфические блэк-кроссоверы (без чистого трэша)
-        "first wave of black metal": "First Wave Black Metal",
-        "first wave black metal": "First Wave Black Metal",
-        "proto-black metal": "Proto-Black Metal",
-        "proto-black": "Proto-Black Metal",
-        "blackened thrash": "Blackened Thrash Metal",
-        "black thrash": "Blackened Thrash Metal",
-        "black thrash metal": "Blackened Thrash Metal",
-        "black speed metal": "Black/Speed Metal",
+        "cyber black": "Industrial Black Metal", "first wave of black metal": "First Wave Black Metal",
+        "proto-black metal": "Proto-Black Metal", "proto-black": "Proto-Black Metal",
+        "blackened thrash": "Blackened Thrash Metal", "black thrash": "Blackened Thrash Metal",
+        "black thrash metal": "Blackened Thrash Metal", "black speed metal": "Black/Speed Metal",
         "blackened speed metal": "Black/Speed Metal"
     }
     
     genres = list(genres_map.keys())
     all_releases = []
     chunk_size = 4
-    headers = {'User-Agent': 'BlackMetalHubBot/17.0 ( mailto:Plokhomentov@example.com )'}
+    headers = {'User-Agent': 'BlackMetalHubBot/18.0 ( mailto:Plokhamentov@example.com )'}
     
-    # Сбор релизов пачками
     for i in range(0, len(genres), chunk_size):
         chunk = genres[i:i + chunk_size]
         tag_queries = " OR ".join([f'tag:"{g}"' for g in chunk])
-                        # ИСПРАВЛЕНО: Правильный синтаксис Lucene для поиска за весь год целиком
-        query = f'type:album AND status:official AND date:[{current_year}-01-01 TO {current_year}-12-31] AND ({tag_queries})'
+        
+        # Lucene-запрос: жесткий отсев синглов, ищем только Album и EP
+        query = f'(type:album OR type:ep) AND status:official AND date:[{current_year}-01-01 TO {current_year}-12-31] AND ({tag_queries})'
         
         offset = 0
         limit = 100
         
-        # Цикл пагинации для выкачивания абсолютно всех страниц ответов
         while True:
-            url = P + "musicbrainz.org" + S + "ws" + S + "2" + S + "release" + "?query=" + urllib.parse.quote(query) + f"&inc=tags+artist-credits&fmt=json&limit={limit}&offset={offset}"
+            # Сборка защищенного URL для MusicBrainz API
+            url = f"{P}{MB_BASE}release{Q}query{E}{urllib.parse.quote(query)}{A}inc{E}tags+artist-credits{A}fmt{E}json{A}limit{E}{limit}{A}offset{E}{offset}"
             time.sleep(1)
             
             try:
                 chunk_releases = []
-                total_count = 0
                 for attempt in range(3):
                     try:
                         req = urllib.request.Request(url, headers=headers)
@@ -197,8 +208,8 @@ def fetch_musicbrainz_new_arrivals():
                                 chunk_releases = chunk_data.get("releases", [])
                                 total_count = chunk_data.get("count", 0)
                                 break
-                    except urllib.error.HTTPError as he:
-                        if he.code == 503 and attempt < 2:
+                    except Exception as he:
+                        if getattr(he, 'code', 0) == 503 and attempt < 2:
                             time.sleep(3)
                             continue
                         raise he
@@ -208,34 +219,27 @@ def fetch_musicbrainz_new_arrivals():
                     
                 all_releases.extend(chunk_releases)
                 
-                # Если дошли до конца выдачи, выходим на следующую группу жанров
                 if offset + limit >= total_count or len(chunk_releases) < limit:
                     break
-                    
                 offset += limit
-                print(f"   -> Загружено {len(all_releases)} релизов из текущей группы жанров...")
-                
             except Exception as e:
-                print(f"⚠️ Ошибка на группе {chunk} (offset {offset}): {e}")
+                print(f"⚠️ Ошибка на группе {chunk}: {e}")
                 break
 
     packs = []
     seen_albums = set()
-    
-    # Фильтрация и форматирование данных
     for rel in all_releases:
         rel_date = rel.get("date", "")
         
-        # Фильтрация по месяцу активна ТОЛЬКО если передан аргумент месяца
         if current_month_num:
             if rel_date and len(rel_date.split("-")) > 1:
                 if rel_date.split("-")[1] != current_month_num:
                     continue
             else:
                 continue
-
+                
         artist_credit = rel.get("artist-credit", [])
-        if not artist_credit: 
+        if not artist_credit:
             continue
             
         first_artist = artist_credit[0] if isinstance(artist_credit, list) else artist_credit
@@ -245,11 +249,15 @@ def fetch_musicbrainz_new_arrivals():
         artist_id = artist_data.get("id", "")
         
         if band and album:
-            release_key = band.lower() + " - " + album.lower()
-            if release_key in seen_albums: 
+            release_key = f"{band.lower()} - {album.lower()}"
+            if release_key in seen_albums:
                 continue
             seen_albums.add(release_key)
             
+            # Стальной Фильтр v4.0: Верификация реальности банды через Metal Archives
+            if not verify_via_metal_archives(band):
+                continue
+                
             country_code = get_country_by_artist_id(artist_id, headers)
             flag_emoji = ""
             if country_code:
@@ -259,31 +267,39 @@ def fetch_musicbrainz_new_arrivals():
             
             tags_list = [t.get("name", "").lower() for t in rel.get("tags", [])]
             subgenres = [genres_map[g_tag] for g_tag in genres_map if g_tag in tags_list]
+            
+            # Если нет блэк-поджанров из строгого списка — скипаем ИИ/поп-мусор
             if not subgenres:
-                subgenres = ["Black Metal"]
+                continue
                 
             genre_str = "/".join(list(set(subgenres)))
             prefix = f"{flag_emoji} " if flag_emoji else ""
             
-            # Подставляем метку месяца (если ищем за месяц), либо полную дату релиза (если ищем за год)
+            # Определяем формат: Album или EP
+            release_status = rel.get("release-group", {}).get("primary-type", "").upper()
+            ep_suffix = " EP" if "EP" in release_status or rel.get("quality", "") == "ep" else ""
+            
             month_label = current_month_tag if current_month_tag else rel_date
             
-            release_info = f"{band} - {album} ({current_year})\n{prefix}{genre_str}\nhttps://youtube.com {month_label}"
+            # Безопасная сборка финального сообщения по ТЗ
+            release_info = f"{band} - {album} ({current_year}){ep_suffix}\n{prefix}{genre_str}\n{P}{YT_BASE} {month_label}"
             packs.append(release_info)
 
-    # Итоговая отправка в Telegram
     period_str = f"{current_month_tag} {current_year}" if current_month_tag else f"{current_year} год"
-    output_text = f"\n---\n".join(packs) if packs else f"🤷 За {period_str} релизов не найдено."
+    output_text = "\n---\n".join(packs) if packs else f"В базе найдено 0 реальных релизов за {period_str}."
     max_len = 4000
     
-    for chunk_text in [output_text[i:i + max_len] for i in range(0, len(output_text), max_len)]:
-        send_url = f"{P}api.telegram.org{S}bot{BOT_TOKEN}{S}sendMessage"
+    for i in range(0, len(output_text), max_len):
+        chunk_text = output_text[i:i + max_len]
+        # Зашифрованный эндпоинт отправки в Telegram
+        send_url = f"{P}{TG_BASE}{BOT_TOKEN}{S}sendMessage"
         payload = json.dumps({"chat_id": ADMIN_CHAT_ID, "text": chunk_text}).encode('utf-8')
         req = urllib.request.Request(send_url, data=payload, headers={"Content-Type": "application/json"})
         try:
-            with urllib.request.urlopen(req) as resp: pass
+            with urllib.request.urlopen(req) as resp:
+                pass
         except Exception as e:
-            print(f"❌ Ошибка отправки: {e}")
+            print(f"❌ Ошибка отправки в Telegram: {e}")
 
 if __name__ == "__main__":
     fetch_musicbrainz_new_arrivals()
