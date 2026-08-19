@@ -77,18 +77,18 @@ COUNTRY_MAP = {
 
 artist_countries_cache = {}
 def verify_via_discogs(band_name, album_name):
-    """ Стальной Фильтр v6.0: Проверка на Discogs + Тотальный бан ИИ-цифрового мусора """
+    """ Стальной Фильтр v7.0: Настоящая базовая верификация без багов формата """
     if not band_name or not album_name:
         return False
     
     search_query = f"{band_name} {album_name}"
     encoded_query = urllib.parse.quote(search_query)
     
-    # Запрос к Discogs API
+    # Прямой запрос к поисковой базе Discogs
     url = f"{P}{D_API}{Q}q{E}{encoded_query}{A}type{E}release"
-    headers = {'User-Agent': 'MetalHubValidatorApp/3.0'}
+    headers = {'User-Agent': 'MetalHubValidatorApp/4.0'}
     
-    time.sleep(1.5) # Немного увеличим паузу для стабильности
+    time.sleep(1)
     try:
         req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=8) as response:
@@ -96,26 +96,13 @@ def verify_via_discogs(band_name, album_name):
                 data = json.loads(response.read().decode('utf-8'))
                 results = data.get("results", [])
                 
+                # Если релиза вообще нет на Discogs — это 100% спам
                 if len(results) > 0:
-                    # Проверяем формат САМОГО ПЕРВОГО (главного) результата
-                    first_release = results[0]
-                    formats = [f.lower() for f in first_release.get("format", [])]
-                    
-                    # Жесткое условие: Если это ТОЛЬКО цифра/файл — это 100% ИИ-мусор или сингл
-                    is_digital = any("file" in fmt or "digital" in fmt or "aac" in fmt or "mp3" in fmt for fmt in formats)
-                    has_physical = any("vinyl" in fmt or "cd" in fmt or "cassette" in fmt or "lp" in fmt for fmt in formats)
-                    
-                    if is_digital and not has_physical:
-                        print(f"❌ БАН: {band_name} - {album_name} признан ИИ-пустышкой (формат: {formats}).")
-                        return False
-                        
-                    print(f"✅ Подтвержден физический релиз: {band_name} - {album_name}")
                     return True
     except Exception as e:
         print(f"⚠️ Сбой сети Discogs для {band_name}: {e}")
-        return True # В случае падения самого API не теряем релиз
+        return True
         
-    print(f"❌ ОТКЛОНЕН: {band_name} - {album_name} не найден в главной базе.")
     return False
 
 def get_country_by_artist_id(artist_id, headers):
@@ -299,6 +286,13 @@ def fetch_musicbrainz_new_arrivals():
             prefix = f"{flag_emoji} " if flag_emoji else ""
             
             release_status = rel.get("release-group", {}).get("primary-type", "").upper()
+            # Защита от синглов: настоящий релиз (Album/EP) должен содержать минимум 3 трека
+            track_count = 0
+            for medium in rel.get("media", []):
+                track_count += medium.get("track-count", 0)
+            if track_count > 0 and track_count < 3:
+                print(f"❌ СИПНУТ СИНГЛ: {band} - {album} имеет всего {track_count} трека(ов).")
+                continue
             ep_suffix = " EP" if "EP" in release_status or rel.get("quality", "") == "ep" else ""
             
             month_label = current_month_tag if current_month_tag else rel_date
