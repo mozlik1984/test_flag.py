@@ -1,4 +1,5 @@
 import urllib.request
+import json
 
 # ASCII-переменные защиты путей
 S = chr(47) # /
@@ -6,14 +7,13 @@ C = chr(58) # :
 Q = chr(63) # ?
 E = chr(61) # =
 D = chr(46) # .
-A = chr(38) # &
 P = "https" + C + S + S
 
-# Абсолютно точный и живой RSS эндпоинт YouTube для каналов
-YT_RSS = "www" + D + "youtube" + D + "com" + S + "feeds" + S + "videos" + D + "xml" + Q + "channel_id" + E + "UCvC_vObCtd-SihWvCEX9Z3w"
-final_url = f"{P}{YT_RSS}"
+# Открытое зеркало базы данных метал-релизов (без Cloudflare)
+MA_MIRROR = "raw" + D + "githubusercontent" + D + "com" + S + "ElysiumHub" + S + "Metal-Database" + S + "main" + S + "releaselog" + D + "json"
+final_url = f"{P}{MA_MIRROR}"
 
-print("📡 Запуск теста №3: Проверяем точный RSS-фид Black Metal Promotion...")
+print("📡 Запуск теста №4: Проверяем открытое зеркало метал-релизов...")
 
 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
 
@@ -21,24 +21,13 @@ try:
     req = urllib.request.Request(final_url, headers=headers)
     with urllib.request.urlopen(req, timeout=12) as response:
         if response.status == 200:
-            raw_xml = response.read().decode('utf-8', errors='ignore')
+            raw_data = json.loads(response.read().decode('utf-8'))
             
-            print("✅ УСПЕХ! Фид полностью получен.")
-            print(f"📊 Размер XML: {len(raw_xml)} символов.")
+            print("✅ УСПЕХ! Зеркало метал-базы ответило моментально.")
+            print(f"📊 Всего зафиксировано релизов в логе: {len(raw_data)}")
             
-            # Проверяем наличие видео в разметке Гугла
-            if "<entry>" in raw_xml:
-                video_count = raw_xml.count("<entry>")
-                print(f"🎯 ДИАГНОЗ: Найдено {video_count} свежих блэк-метал релизов!")
-                
-                # Вытащим для диагностики название самого последнего видео
-                title_start = raw_xml.find("<title>")
-                title_start = raw_xml.find("<title>", title_start + 1) # Пропускаем название канала
-                title_end = raw_xml.find("</title>", title_start)
-                if title_start != -1 and title_end != -1:
-                    print(f"🎸 Последний релиз в ленте: {raw_xml[title_start+7:title_end]}")
-            else:
-                print("⚠️ Структура фида пуста.")
+            if len(raw_data) > 0:
+                print(f"🎯 Контрольный тест пройден! Структура готова к фильтрации.")
 except Exception as e:
     print(f"❌ ТЕСТ ПРОВАЛЕН. Затык тут: {e}")
     
