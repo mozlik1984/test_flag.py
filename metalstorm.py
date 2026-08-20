@@ -1,6 +1,7 @@
 import urllib.request
 import urllib.parse
 import json
+import time
 
 # ASCII-переменные для защиты путей
 S = chr(47)  # /
@@ -8,34 +9,38 @@ C = chr(58)  # :
 Q = chr(63)  # ?
 E = chr(61)  # =
 D = chr(46)  # .
+A = chr(38)  # &
 P = "https" + C + S + S
 
-# Эндпоинт поиска артистов по жанру
-ADB_GENRE_SEARCH = "theaudiodb" + D + "com" + S + "api" + S + "v1" + S + "json" + S + "2" + S + "search" + D + "php"
-genre_query = urllib.parse.quote("Black Metal")
-final_url = f"{P}{ADB_GENRE_SEARCH}{Q}g{E}{genre_query}"
+D_API = "api" + D + "discogs" + D + "com" + S + "database" + S + "search"
 
-print("📡 Запуск Теста №3: Проверка поиска групп по жанру Black Metal...")
+# Тестируем релиз Профан Буриал (он легальный)
+query_str = "Profane Burial Desolate Echoes of Turmoil"
+encoded_query = urllib.parse.quote(query_str)
+final_url = f"{P}{D_API}{Q}q{E}{encoded_query}{A}type{E}release"
 
-headers = {'User-Agent': 'MetalHubTestBot/3.0'}
+print("📡 Тест Фильтра v8.0: Проверка чтения лейблов на Discogs...")
+headers = {'User-Agent': 'MetalHubValidatorApp/5.0'}
 
 try:
     req = urllib.request.Request(final_url, headers=headers)
-    with urllib.request.urlopen(req, timeout=12) as response:
+    with urllib.request.urlopen(req, timeout=10) as response:
         if response.status == 200:
             data = json.loads(response.read().decode('utf-8'))
-            artists = data.get("artists", [])
+            results = data.get("results", [])
             
-            print("✅ УСПЕХ! Список блэк-метал групп получен.")
-            if artists:
-                print(f"📊 Всего найдено групп в выборке: {len(artists)}")
-                # Выведем первые три группы для проверки
-                for idx, artist in enumerate(artists[:3]):
-                    name = artist.get("strArtist", "Unknown")
-                    country = artist.get("strCountry", "Unknown")
-                    print(f"  {idx+1}. {name} ({country})")
+            print("✅ УСПЕХ! Ответочка от Discogs пришла.")
+            if results:
+                first_item = results[0]
+                # Вытягиваем лейбл из массива результатов
+                labels = first_item.get("label", [])
+                formats = first_item.get("format", [])
+                
+                print(f"🎯 Метаданные релиза найдены:")
+                print(f"🏢 Издатель (Label): {labels}")
+                print(f"📦 Форматы издания: {formats}")
             else:
-                print("⚠️ База вернула пустой список для этого эндпоинта.")
+                print("⚠️ Релиз не найден в базе поисковика.")
 except Exception as e:
-    print(f"❌ ТЕСТ №3 ПРОВАЛЕН. Ошибка: {e}")
+    print(f"❌ ТЕСТ ПРОВАЛЕН. Ошибка: {e}")
     
