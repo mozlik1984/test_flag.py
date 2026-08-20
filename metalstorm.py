@@ -1,8 +1,7 @@
 import urllib.request
-import urllib.parse
 import json
 
-# Абсолютная ASCII-защита протоколов и путей
+# ASCII-переменные для защиты путей
 S = chr(47)  # /
 C = chr(58)  # :
 Q = chr(63)  # ?
@@ -10,40 +9,34 @@ E = chr(61)  # =
 D = chr(46)  # .
 P = "https" + C + S + S
 
-# Открытый эндпоинт TheAudioDB API (тестовый ключ '2')
-ADB_API = "theaudiodb" + D + "com" + S + "api" + S + "v1" + S + "json" + S + "2" + S + "search" + D + "php"
+# Эндпоинт получения списка альбомов по ID артиста (для теста берем Mayhem, их ID = 114354)
+ADB_ALBUMS = "theaudiodb" + D + "com" + S + "api" + S + "v1" + S + "json" + S + "2" + S + "album" + D + "php"
+final_url = f"{P}{ADB_ALBUMS}{Q}i{E}114354"
 
-# Тестируем поиск группы Mayhem
-band_name = "Mayhem"
-encoded_band = urllib.parse.quote(band_name)
-final_url = f"{P}{ADB_API}{Q}s{E}{encoded_band}"
+print("📡 Запуск теста №2: Проверка структуры альбомов в TheAudioDB...")
 
-print("📡 Запуск разведки TheAudioDB API v1.0...")
-
-headers = {'User-Agent': 'MetalHubTestBot/1.0'}
+headers = {'User-Agent': 'MetalHubTestBot/2.0'}
 
 try:
     req = urllib.request.Request(final_url, headers=headers)
     with urllib.request.urlopen(req, timeout=12) as response:
         if response.status == 200:
-            raw_data = response.read().decode('utf-8')
-            data = json.loads(raw_data)
-            artists = data.get("artists", [])
+            data = json.loads(response.read().decode('utf-8'))
+            album_list = data.get("album", [])
             
-            print("✅ УСПЕХ! Сервер TheAudioDB ответил моментально.")
+            print("✅ УСПЕХ! Структура альбомов получена.")
+            print(f"📊 Всего альбомов исполнителя в базе: {len(album_list)}")
             
-            if artists and len(artists) > 0:
-                first_artist = artists[0]
-                str_band = first_artist.get("strArtist", "Unknown")
-                str_genre = first_artist.get("strGenre", "Unknown")
-                str_country = first_artist.get("strCountry", "Unknown")
-                
-                print(f"🎯 Контрольный тест пройден успешно!")
-                print(f"🎸 Найдена группа: {str_band}")
-                print(f"💀 Основной жанр: {str_genre}")
-                print(f"🌍 Страна: {str_country}")
+            if album_list and len(album_list) > 0:
+                # Берем первый альбом для изучения полей
+                test_album = album_list[0]
+                print(f"🎯 Пример метаданных релиза:")
+                print(f"💿 Название: {test_album.get('strAlbum', 'Unknown')}")
+                print(f"📅 Год выпуска: {test_album.get('intYearReleased', 'Unknown')}")
+                print(f"📦 Формат/Тип: {test_album.get('strReleaseFormat', 'Unknown')}")
+                print(f"🏷️ Жанр в карточке: {test_album.get('strGenre', 'Unknown')}")
             else:
-                print("⚠️ Соединение есть, но группа не найдена в базе.")
+                print("⚠️ Список альбомов пуст.")
 except Exception as e:
-    print(f"❌ РАЗВЕДКА ПРОВАЛЕНА. Ошибка подключения: {e}")
+    print(f"❌ ТЕСТ №2 ПРОВАЛЕН. Ошибка: {e}")
     
