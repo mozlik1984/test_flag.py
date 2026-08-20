@@ -1,5 +1,4 @@
 import urllib.request
-import urllib.parse
 import json
 
 # ASCII-переменные для защиты путей
@@ -10,16 +9,15 @@ E = chr(61)  # =
 D = chr(46)  # .
 P = "https" + C + S + S
 
-# Публичное веб-зеркало Telegram-канала с метал-новинками
-# Для теста берем один из живых метал-каналов (например, метал-архив новейших релизов)
-TG_CHANNEL = "t" + D + "me" + S + "s" + S + "metal_releases_archive"  # Пример названия канала
-final_url = f"{P}t{D}me{S}s{S}black_metal_hub" # Проверим гипотетический хаб блэка
+# Берем реальный открытый публичный метал-канал для теста коннекта
+# Используем его публичную веб-витрину /s/
+TARGET_CHANNEL = "metalprogression"
+final_url = f"{P}t{D}me{S}s{S}{TARGET_CHANNEL}"
 
-print("📡 Запуск разведки Telegram-вебзеркала...")
+print(f"📡 Запуск теста v12.1: Сканируем веб-витрину Telegram-канала @{TARGET_CHANNEL}...")
 
-# Маскируемся под обычный мобильный браузер, чтобы Telegram отдал HTML страницу
 headers = {
-    'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 }
 
 try:
@@ -28,15 +26,16 @@ try:
         if response.status == 200:
             html_content = response.read().decode('utf-8', errors='ignore')
             
-            print("✅ УСПЕХ! Telegram-зеркало ответило моментально.")
-            print(f"📊 Размер полученной страницы: {len(html_content)} символов.")
+            print("✅ УСПЕХ! Сервер Telegram ответил моментально.")
+            print(f"📊 Объем скачанного HTML: {len(html_content)} символов.")
             
-            # Проверяем, есть ли на странице системные блоки сообщений Telegram
-            if "tgme_widget_message_text" in html_content:
-                post_count = html_content.count("tgme_widget_message_text")
-                print(f"🎯 ДИАГНОЗ: Внутри кода успешно обнаружено {post_count} текстовых постов!")
+            # Проверяем, видны ли текстовые блоки постов в HTML-разметке
+            marker = "tgme_widget_message_text"
+            if marker in html_content:
+                posts_found = html_content.count(marker)
+                print(f"🎯 ДИАГНОЗ: Обнаружено {posts_found} открытых постов для парсинга!")
             else:
-                print("⚠️ ДИАГНОЗ: Страница получена, но блоки сообщений пусты или скрыты настройками приватности.")
+                print("⚠️ ДИАГНОЗ: HTML получен, но блоки сообщений скрыты или защищены.")
 except Exception as e:
-    print(f"❌ РАЗВЕДКА ПРОВАЛЕНА. Затык тут: {e}")
+    print(f"❌ РАЗВЕДКА ПРОВАЛЕНА. Затык здесь: {e}")
     
