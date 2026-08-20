@@ -1,4 +1,5 @@
 import urllib.request
+import urllib.parse
 import json
 
 # ASCII-переменные для защиты путей
@@ -9,34 +10,32 @@ E = chr(61)  # =
 D = chr(46)  # .
 P = "https" + C + S + S
 
-# Эндпоинт получения списка альбомов по ID артиста (для теста берем Mayhem, их ID = 114354)
-ADB_ALBUMS = "theaudiodb" + D + "com" + S + "api" + S + "v1" + S + "json" + S + "2" + S + "album" + D + "php"
-final_url = f"{P}{ADB_ALBUMS}{Q}i{E}114354"
+# Эндпоинт поиска артистов по жанру
+ADB_GENRE_SEARCH = "theaudiodb" + D + "com" + S + "api" + S + "v1" + S + "json" + S + "2" + S + "search" + D + "php"
+genre_query = urllib.parse.quote("Black Metal")
+final_url = f"{P}{ADB_GENRE_SEARCH}{Q}g{E}{genre_query}"
 
-print("📡 Запуск теста №2: Проверка структуры альбомов в TheAudioDB...")
+print("📡 Запуск Теста №3: Проверка поиска групп по жанру Black Metal...")
 
-headers = {'User-Agent': 'MetalHubTestBot/2.0'}
+headers = {'User-Agent': 'MetalHubTestBot/3.0'}
 
 try:
     req = urllib.request.Request(final_url, headers=headers)
     with urllib.request.urlopen(req, timeout=12) as response:
         if response.status == 200:
             data = json.loads(response.read().decode('utf-8'))
-            album_list = data.get("album", [])
+            artists = data.get("artists", [])
             
-            print("✅ УСПЕХ! Структура альбомов получена.")
-            print(f"📊 Всего альбомов исполнителя в базе: {len(album_list)}")
-            
-            if album_list and len(album_list) > 0:
-                # Берем первый альбом для изучения полей
-                test_album = album_list[0]
-                print(f"🎯 Пример метаданных релиза:")
-                print(f"💿 Название: {test_album.get('strAlbum', 'Unknown')}")
-                print(f"📅 Год выпуска: {test_album.get('intYearReleased', 'Unknown')}")
-                print(f"📦 Формат/Тип: {test_album.get('strReleaseFormat', 'Unknown')}")
-                print(f"🏷️ Жанр в карточке: {test_album.get('strGenre', 'Unknown')}")
+            print("✅ УСПЕХ! Список блэк-метал групп получен.")
+            if artists:
+                print(f"📊 Всего найдено групп в выборке: {len(artists)}")
+                # Выведем первые три группы для проверки
+                for idx, artist in enumerate(artists[:3]):
+                    name = artist.get("strArtist", "Unknown")
+                    country = artist.get("strCountry", "Unknown")
+                    print(f"  {idx+1}. {name} ({country})")
             else:
-                print("⚠️ Список альбомов пуст.")
+                print("⚠️ База вернула пустой список для этого эндпоинта.")
 except Exception as e:
-    print(f"❌ ТЕСТ №2 ПРОВАЛЕН. Ошибка: {e}")
+    print(f"❌ ТЕСТ №3 ПРОВАЛЕН. Ошибка: {e}")
     
