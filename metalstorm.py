@@ -1,88 +1,42 @@
-import os
 import urllib.request
 import urllib.parse
 import json
-import time
 
-# Данные авторизации
-BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
-ADMIN_CHAT_ID = 5002053185
-DISCOGS_TOKEN = "pMJGQnTxUPhrxUHCFytavDSnxAOiBwhPjjxuDtue"
-
-# Маскировка протоколов
-S = chr(47); C = chr(58); Q = chr(63); A = chr(38); E = chr(61); D = chr(46)
+# ASCII-переменные для защиты путей
+S = chr(47)  # /
+C = chr(58)  # :
+Q = chr(63)  # ?
+E = chr(61)  # =
+D = chr(46)  # .
 P = "https" + C + S + S
-D_API = "api" + D + "discogs" + D + "com" + S + "database" + S + "search"
-TG_BASE = "api.telegram.org" + S + "bot"
-YT_BASE = "youtube.com"
 
-TARGET_STYLE = "Black Metal"
-TARGET_YEAR = "2026"
+# Публичное веб-зеркало Telegram-канала с метал-новинками
+# Для теста берем один из живых метал-каналов (например, метал-архив новейших релизов)
+TG_CHANNEL = "t" + D + "me" + S + "s" + S + "metal_releases_archive"  # Пример названия канала
+final_url = f"{P}t{D}me{S}s{S}black_metal_hub" # Проверим гипотетический хаб блэка
 
-print(f"📡 Запуск прямой выгрузки свежих релизов Discogs по жанру {TARGET_STYLE}...")
+print("📡 Запуск разведки Telegram-вебзеркала...")
 
+# Маскируемся под обычный мобильный браузер, чтобы Telegram отдал HTML страницу
 headers = {
-    'User-Agent': 'MetalHubDirectStream/1.0',
-    'Authorization': f'Discogs token={DISCOGS_TOKEN}'
+    'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
 }
 
-encoded_style = urllib.parse.quote(TARGET_STYLE)
-
-# Делаем ультимативный запрос: ищем альбомы 2026 года, сортируя их по дате добавления в базу (year, desc)
-url = f"{P}{D_API}{Q}style{E}{encoded_style}{A}year{E}{TARGET_YEAR}{A}type{E}release{A}format{E}album{A}per_page{E}30"
-
-packs = []
-seen_releases = set()
-
 try:
-    req = urllib.request.Request(url, headers=headers)
+    req = urllib.request.Request(final_url, headers=headers)
     with urllib.request.urlopen(req, timeout=12) as response:
         if response.status == 200:
-            data = json.loads(response.read().decode('utf-8'))
-            results = data.get("results", [])
+            html_content = response.read().decode('utf-8', errors='ignore')
             
-            print(f"✅ УСПЕХ! База ответила. Получено {len(results)} позиций.")
+            print("✅ УСПЕХ! Telegram-зеркало ответило моментально.")
+            print(f"📊 Размер полученной страницы: {len(html_content)} символов.")
             
-            for item in results:
-                title_raw = item.get("title", "")
-                if not title_raw or " - " not in title_raw:
-                    continue
-                
-                parts = title_raw.split(" - ", 1)
-                band = parts[0].strip()
-                album = parts[1].strip()
-                
-                # Убираем архивные дубликаты Discogs с цифрами в скобках
-                if "(" in band and ")" in band:
-                    continue
-                
-                # Тотальный склейщик повторов
-                release_key = f"{band.lower()} - {album.lower()}"
-                if release_key in seen_releases:
-                    continue
-                seen_releases.add(release_key)
-                
-                # Извлекаем страну издания винила/диска
-                country_name = item.get("country", "").strip()
-                
-                # Упаковываем в твой стандартный текстовый формат для Amvera
-                release_info = f"{band} - {album} ({TARGET_YEAR})\n🌍 {country_name} | {TARGET_STYLE}\n{P}{YT_BASE} AUG"
-                packs.append(release_info)
-                
+            # Проверяем, есть ли на странице системные блоки сообщений Telegram
+            if "tgme_widget_message_text" in html_content:
+                post_count = html_content.count("tgme_widget_message_text")
+                print(f"🎯 ДИАГНОЗ: Внутри кода успешно обнаружено {post_count} текстовых постов!")
+            else:
+                print("⚠️ ДИАГНОЗ: Страница получена, но блоки сообщений пусты или скрыты настройками приватности.")
 except Exception as e:
-    print(f"❌ Ошибка выгрузки: {e}")
-
-# Отправка финального текстового пакета
-if packs:
-    output_text = f"🔥 Свежие поступления {TARGET_STYLE} за {TARGET_YEAR} год:\n\n" + "\n---\n".join(packs)
-else:
-    output_text = "🤷‍♂️ В базе Discogs ничего не найдено по данному запросу."
-
-send_url = f"{P}{TG_BASE}{BOT_TOKEN}{S}sendMessage"
-payload = json.dumps({"chat_id": ADMIN_CHAT_ID, "text": output_text}).encode('utf-8')
-req = urllib.request.Request(send_url, data=payload, headers={"Content-Type": "application/json"})
-try:
-    with urllib.request.urlopen(req) as resp: pass
-except Exception: pass
-print("🏁 Скрипт завершил работу.")
-
+    print(f"❌ РАЗВЕДКА ПРОВАЛЕНА. Затык тут: {e}")
+    
