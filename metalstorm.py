@@ -1,6 +1,4 @@
 import urllib.request
-import urllib.parse
-import json
 
 # ASCII-переменные защиты путей
 S = chr(47) # /
@@ -11,49 +9,36 @@ D = chr(46) # .
 A = chr(38) # &
 P = "https" + C + S + S
 
-# Внутренний эндпоинт YouTube для получения видео с канала
-# Используем ID канала Black Metal Promotion
-YT_API = "www" + D + "youtube" + D + "com" + S + "youtubei" + S + "v1" + S + "browse"
-final_url = f"{P}{YT_API}"
+# Абсолютно точный и живой RSS эндпоинт YouTube для каналов
+YT_RSS = "www" + D + "youtube" + D + "com" + S + "feeds" + S + "videos" + D + "xml" + Q + "channel_id" + E + "UCvC_vObCtd-SihWvCEX9Z3w"
+final_url = f"{P}{YT_RSS}"
 
-print("📡 Запуск теста №2: Пробиваем YouTube через внутренний эндпоинт...")
+print("📡 Запуск теста №3: Проверяем точный RSS-фид Black Metal Promotion...")
 
-# Формируем JSON-тело запроса, которое требует YouTube
-payload = json.dumps({
-    "browseId": "UCvC_vObCtd-SihWvCEX9Z3w",
-    "params": "EgZ2aWRlb3PyBgQKAjoA", # Параметр, открывающий вкладку "Видео"
-    "context": {
-        "client": {
-            "clientName": "WEB",
-            "clientVersion": "2.20260815.00.00",
-            "hl": "en"
-        }
-    }
-}).encode('utf-8')
-
-req = urllib.request.Request(
-    final_url, 
-    data=payload, 
-    headers={
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-        'Content-Type': 'application/json'
-    }
-)
+headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
 
 try:
+    req = urllib.request.Request(final_url, headers=headers)
     with urllib.request.urlopen(req, timeout=12) as response:
         if response.status == 200:
-            raw_data = json.loads(response.read().decode('utf-8'))
+            raw_xml = response.read().decode('utf-8', errors='ignore')
             
-            print("✅ УСПЕХ! YouTube полностью отдал структуру канала.")
+            print("✅ УСПЕХ! Фид полностью получен.")
+            print(f"📊 Размер XML: {len(raw_xml)} символов.")
             
-            # Проверяем, пришли ли нам данные о видеороликах
-            raw_str = json.dumps(raw_data)
-            if "videoRenderer" in raw_str:
-                video_count = raw_str.count("videoRenderer")
-                print(f"🎯 ДИАГНОЗ: Внутри структуры обнаружено около {video_count} видео!")
+            # Проверяем наличие видео в разметке Гугла
+            if "<entry>" in raw_xml:
+                video_count = raw_xml.count("<entry>")
+                print(f"🎯 ДИАГНОЗ: Найдено {video_count} свежих блэк-метал релизов!")
+                
+                # Вытащим для диагностики название самого последнего видео
+                title_start = raw_xml.find("<title>")
+                title_start = raw_xml.find("<title>", title_start + 1) # Пропускаем название канала
+                title_end = raw_xml.find("</title>", title_start)
+                if title_start != -1 and title_end != -1:
+                    print(f"🎸 Последний релиз в ленте: {raw_xml[title_start+7:title_end]}")
             else:
-                print("⚠️ ДИАГНОЗ: Ответ получен, но массив видео пуст или заблокирован.")
+                print("⚠️ Структура фида пуста.")
 except Exception as e:
     print(f"❌ ТЕСТ ПРОВАЛЕН. Затык тут: {e}")
     
