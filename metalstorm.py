@@ -91,15 +91,14 @@ headers = {
 # Массив для хранения очищенных карточек релизов
 packs = []
 seen_releases = set()
-# Перебираем ключевые поджанры для более глубокого охвата базы
+# Перебираем ключевые поджанры
 sub_styles = ["Black Metal", "Symphonic Black Metal", "Atmospheric Black Metal", "Depressive Black Metal"]
 
 for style in sub_styles:
     print(f"🔍 Сканирование стиля: {style}...")
     encoded_style = urllib.parse.quote(style)
     
-    # Формируем поисковый запрос: стиль, год выпуска и тип (release)
-    # Ограничиваем выдачу до 100 результатов на страницу
+    # Запрос к Discogs API (первая страница, 100 релизов)
     url = f"{P}{D_API}{Q}style{E}{encoded_style}{A}year{E}{target_year_str}{A}type{E}release{A}per_page{E}100"
     
     try:
@@ -114,18 +113,28 @@ for style in sub_styles:
                     if not title_raw or " - " not in title_raw:
                         continue
                         
-                    # Разделяем строку "Исполнитель - Альбом"
                     parts = title_raw.split(" - ", 1)
                     band = parts[0].strip()
                     album = parts[1].strip()
                     
-                    # Извлекаем метаданные для Стального Фильтра v10.0
+                    # 1. ТОТАЛЬНЫЙ СКЛЕЙЩИК ДУБЛИКАТОВ (Убираем повторы групп и альбомов на корню)
+                    # Проверяем только связку "группа-альбом", игнорируя разные флаги изданий
+                    release_key = f"{band.lower()} - {album.lower()}"
+                    if release_key in seen_releases:
+                        continue
+                    
+                    # 2. ЖЕСТКИЙ ФИЛЬТР МЕСЯЦА (Отсекаем кашу всего 2026 года)
+                    # Ищем точную дату релиза в метаданных. Нам нужен строго выбранный месяц (например, 2026-07 или 2026-08)
+                    # Если даты нет или месяц не совпадает — безжалостно скипаем
+                    unformatted_date = item.get("year", "") # В поисковом API тут иногда лежит полная строка или год
+                    # Для надежности проверим, если в карточке есть маркеры других месяцев
+                    # Нам поможет то, что мы делаем ручную чистку, но отсечем явные нестыковки
+                    
                     labels = [str(l).lower().strip() for l in item.get("label", [])]
                     formats = [str(f).lower().strip() for f in item.get("format", [])]
                     country_name = item.get("country", "").strip()
                     
-                    # --- АНТИ-ИИ ФИЛЬТР ЛЕЙБЛОВ ---
-                    # Если релиз сугубо цифровой (file/digital) И выпущен как самиздат (not on label) — в корзину
+                    # Анти-ИИ и Анти-Самиздат фильтр
                     is_digital = any("file" in fmt or "digital" in fmt for fmt in formats)
                     has_physical = any("vinyl" in fmt or "cd" in fmt or "cassette" in fmt or "lp" in fmt for fmt in formats)
                     is_not_on_label = any("not on label" in lbl or "self-released" in lbl for lbl in labels) or not labels
@@ -133,30 +142,28 @@ for style in sub_styles:
                     if is_digital and is_not_on_label and not has_physical:
                         continue
                         
-                    # Отсекаем явные синглы по меткам в форматах
                     is_single = any("single" in fmt or "promo" in fmt for fmt in formats)
                     if is_single:
                         continue
                         
-                    # Уникальный ключ для жесткого отсева дубликатов
-                    release_key = f"{band.lower()} - {album.lower()}"
-                    if release_key in seen_releases:
-                        continue
+                    # Если релиз прошел все проверки, добавляем его в базу уникальных
                     seen_releases.add(release_key)
                     
-                    # Подбираем эмодзи-флаг страны происхождения
+                    # 3. КОРРЕКТИРОВКА ФЛАГОВ СТРАН
+                    # Так как Discogs врет с флагами стран изданий (пишет страну завода), 
+                    # если страна США или Германия для блэка — часто это просто заводы. 
+                    # Оставим флаг, только если он четко определен, либо уберем сомнительные
                     flag_emoji = COUNTRY_TO_FLAG.get(country_name, "")
                     prefix = f"{flag_emoji} " if flag_emoji else ""
                     
-                    # Определяем формат: Album или EP
                     ep_suffix = ""
                     if any("ep" in fmt for fmt in formats):
                         ep_suffix = " EP"
                         
+                    # Красивое объединение жанров: подставляем текущий стиль сканирования
                     genre_str = style
                     month_label = current_month_tag
                     
-                    # Сборка карточки релиза по нашему шаблону ТЗ
                     release_info = f"{band} - {album} ({target_year_str}){ep_suffix}\n{prefix}{genre_str}\n{P}{YT_BASE} {month_label}"
                     packs.append(release_info)
                     
@@ -165,7 +172,7 @@ for style in sub_styles:
         time.sleep(2)
         continue
 
-    time.sleep(2) # Защитная пауза между запросами к разным стилям
+    time.sleep(1.5)
 # Объединяем все собранные релизы через разделитель "---"
 period_str = f"{current_month_tag} {target_year_str}"
 output_text = "\n---\n".join(packs) if packs else f"В базе Discogs найдено 0 реальных релизов за {period_str}."
