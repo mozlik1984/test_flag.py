@@ -1,5 +1,6 @@
 import urllib.request
-import time
+import urllib.parse
+import json
 
 # ASCII-переменные защиты путей
 S = chr(47) # /
@@ -7,32 +8,52 @@ C = chr(58) # :
 Q = chr(63) # ?
 E = chr(61) # =
 D = chr(46) # .
+A = chr(38) # &
 P = "https" + C + S + S
 
-# Прямой и легальный фид конкретного YouTube-канала (Black Metal Promotion)
-YT_FEED = "www" + D + "youtube" + D + "com" + S + "feeds" + S + "videos" + D + "xml" + Q + "channel_id" + E + "UCvC_vObCtd-SihWvCEX9Z3w"
-final_url = f"{P}{YT_FEED}"
+# Внутренний эндпоинт YouTube для получения видео с канала
+# Используем ID канала Black Metal Promotion
+YT_API = "www" + D + "youtube" + D + "com" + S + "youtubei" + S + "v1" + S + "browse"
+final_url = f"{P}{YT_API}"
 
-print("📡 Запуск разведки YouTube RSS-фида канала Black Metal Promotion...")
+print("📡 Запуск теста №2: Пробиваем YouTube через внутренний эндпоинт...")
 
-headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+# Формируем JSON-тело запроса, которое требует YouTube
+payload = json.dumps({
+    "browseId": "UCvC_vObCtd-SihWvCEX9Z3w",
+    "params": "EgZ2aWRlb3PyBgQKAjoA", # Параметр, открывающий вкладку "Видео"
+    "context": {
+        "client": {
+            "clientName": "WEB",
+            "clientVersion": "2.20260815.00.00",
+            "hl": "en"
+        }
+    }
+}).encode('utf-8')
+
+req = urllib.request.Request(
+    final_url, 
+    data=payload, 
+    headers={
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        'Content-Type': 'application/json'
+    }
+)
 
 try:
-    req = urllib.request.Request(final_url, headers=headers)
     with urllib.request.urlopen(req, timeout=12) as response:
         if response.status == 200:
-            raw_xml = response.read().decode('utf-8', errors='ignore')
+            raw_data = json.loads(response.read().decode('utf-8'))
             
-            print("✅ УСПЕХ! YouTube ответил моментально и отдал данные.")
-            print(f"📊 Размер полученного фида: {len(raw_xml)} символов.")
+            print("✅ УСПЕХ! YouTube полностью отдал структуру канала.")
             
-            # Проверяем структуру: ищем теги <entry> (это видеоролики)
-            if "<entry>" in raw_xml:
-                # Считаем количество свежих видео в ленте
-                video_count = raw_xml.count("<entry>")
-                print(f"🎯 ДИАГНОЗ: В ленте успешно обнаружено {video_count} свежих видео!")
+            # Проверяем, пришли ли нам данные о видеороликах
+            raw_str = json.dumps(raw_data)
+            if "videoRenderer" in raw_str:
+                video_count = raw_str.count("videoRenderer")
+                print(f"🎯 ДИАГНОЗ: Внутри структуры обнаружено около {video_count} видео!")
             else:
-                print("⚠️ ДИАГНОЗ: Ответ получен, но свежих видео внутри структуры нет.")
+                print("⚠️ ДИАГНОЗ: Ответ получен, но массив видео пуст или заблокирован.")
 except Exception as e:
-    print(f"❌ РАЗВЕДКА ПРОВАЛЕНА. Затык тут: {e}")
+    print(f"❌ ТЕСТ ПРОВАЛЕН. Затык тут: {e}")
     
