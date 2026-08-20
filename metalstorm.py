@@ -1,7 +1,7 @@
 import urllib.request
 import json
 
-# ASCII-переменные для тотальной защиты путей
+# ASCII-переменные для защиты путей
 S = chr(47)  # /
 C = chr(58)  # :
 Q = chr(63)  # ?
@@ -10,12 +10,12 @@ D = chr(46)  # .
 A = chr(38)  # &
 P = "https" + C + S + S
 
-# Официальный, открытый партнерский API-эндпоинт Apple Music для тяжелой музыки (Metal, ID = 1153)
-# Запрашиваем топ-100 самых свежих релизов
-APPLE_API = "rss" + D + "applemarketingtools" + D + "com" + S + "api" + S + "v2" + S + "us" + S + "music" + S + "most-played" + S + "100" + S + "albums" + D + "json"
-final_url = f"{P}{APPLE_API}"
+# Точечный эндпоинт Apple Music, изолированный строго под жанр Heavy Metal (ID = 1153)
+# Запрашиваем 100 самых свежих релизов именно в метале
+APPLE_METAL = "rss" + D + "applemarketingtools" + D + "com" + S + "api" + S + "v2" + S + "us" + S + "music" + S + "new-releases" + S + "100" + S + "albums" + D + "json" + Q + "genre" + E + "1153"
+final_url = f"{P}{APPLE_METAL}"
 
-print("📡 Запуск разведки Apple Music API v1.0...")
+print("📡 Запуск теста №2: Сканирование тяжелой секции Apple Music...")
 
 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
 
@@ -27,18 +27,18 @@ try:
             feed = data.get("feed", {})
             results = feed.get("results", [])
             
-            print("✅ УСПЕХ! Сервер Apple Music ответил моментально.")
-            print(f"📊 Всего горячих метал-альбомов в ленте: {len(results)}")
+            print("✅ УСПЕХ! Тяжелая секция Apple ответила.")
+            print(f"📊 Найдено свежих метал-альбомов: {len(results)}")
             
             if results and len(results) > 0:
-                print("🎯 Контрольный срез первых 3 новинок в базе:")
-                for idx, album in enumerate(results[:3]):
+                print("🎯 Контрольный срез первых 5 релизов в метал-ленте:")
+                for idx, album in enumerate(results[:5]):
                     name = album.get("name", "Unknown")
                     artist = album.get("artistName", "Unknown")
                     rel_date = album.get("releaseDate", "Unknown")
                     print(f"  {idx+1}. {artist} - {name} ({rel_date})")
             else:
-                print("⚠️ Фид получен, но массив релизов пуст.")
+                print("⚠️ Метал-лента пуста.")
 except Exception as e:
-    print(f"❌ РАЗВЕДКА ПРОВАЛЕНА. Затык тут: {e}")
+    print(f"❌ ТЕСТ ПРОВАЛЕН. Затык тут: {e}")
     
