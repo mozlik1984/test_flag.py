@@ -15,33 +15,44 @@ D_API = "api" + D + "discogs" + D + "com" + S + "database" + S + "search"
 TG_BASE = "api.telegram.org" + S + "bot"
 YT_BASE = "youtube.com"
 
-# Работа по требованию через аргументы Гитхаба
+# Инициализация календаря и периодов поиска
+months_map = {1: "JAN", 2: "FEB", 3: "MAR", 4: "APR", 5: "MAY", 6: "JUN", 7: "JUL", 8: "AUG", 9: "SEP", 10: "OCT", 11: "NOV", 12: "DEC"}
 months_num_map = {"JUL": "07", "AUG": "08", "SEP": "09"}
-current_month_tag = "AUG"
-current_year = "2026"
+
+# Динамическое считывание аргументов ручного запуска (GitHub Actions)
+# sys.argv[0] - имя скрипта, sys.argv[1] - месяц, sys.argv[2] - год
+if len(sys.argv) > 1:
+    current_month_tag = str(sys.argv[1]).strip().upper()
+else:
+    current_month_tag = "AUG" # Дефолт, если запуск пустой
 
 if len(sys.argv) > 2:
-    input_month = str(sys.argv).strip().upper()
-    input_year = str(sys.argv).strip().upper()
-    if input_year.isdigit(): current_year = input_year
-    if input_month in months_num_map: current_month_tag = input_month
+    current_year = str(sys.argv[2]).strip().upper()
+else:
+    current_year = "2026"
 
-# Целевой маркер месяца для фильтрации (например, "-08-")
+# Если в Гитхабе выбрано "AUTO", подставляем текущий системный месяц
+if current_month_tag == "AUTO" or current_month_tag not in months_num_map:
+    time_struct = time.gmtime()
+    current_month_tag = months_map.get(time_struct.tm_mon, "AUG")
+
+if current_year == "AUTO":
+    time_struct = time.gmtime()
+    current_year = str(time_struct.tm_year)
+
+# Формируем жесткий строковый маркер месяца для фильтрации Discogs (например, "-07-")
 target_month_marker = f"-{months_num_map[current_month_tag]}-"
 
-print(f"📡 Запуск DSBM-парсера с календарным фильтром на {current_month_tag} {current_year}...")
+print(f"📡 Скрипт успешно принял аргументы Гитхаба!")
+print(f"📅 Целевой период поиска: {current_month_tag} {current_year} (Маркер: {target_month_marker})")
 
+# Сборка авторизационных заголовков с персональным токеном
 headers = {
-    'User-Agent': 'MetalHubDSBMCalibrator/2.0',
+    'User-Agent': 'MetalHubDSBMCalibrator/3.0',
     'Authorization': f'Discogs token={DISCOGS_TOKEN}'
 }
 
-TARGET_STYLE = "Depressive Black Metal"
-encoded_style = urllib.parse.quote(TARGET_STYLE)
-
-# Ищем строго полноформатные альбомы текущего года
-url = f"{P}{D_API}{Q}style{E}{encoded_style}{A}year{E}{current_year}{A}type{E}release{A}format{E}album{A}per_page{E}100"
-
+# Массивы хранения уникальных данных
 packs = []
 seen_releases = set()
 
